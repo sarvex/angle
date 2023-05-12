@@ -40,7 +40,7 @@ def does_git_dir_exist(cwd):
     ret = os.path.exists(os.path.join(cwd, '.git', 'HEAD'))
     # .git may be a file with a gitdir directive pointing elsewhere.
     if not ret and os.path.exists(os.path.join(cwd, '.git')):
-        ret = 'true' == grab_output('git rev-parse --is-inside-work-tree', cwd)
+        ret = grab_output('git rev-parse --is-inside-work-tree', cwd) == 'true'
     return ret
 
 
@@ -83,6 +83,13 @@ elif operation == 'get_git_dirs':
     print(get_git_dir(cwd))
     print(get_git_common_dir(cwd))
     sys.exit(0)
+elif operation == 'position':
+    if git_dir_exists:
+        print(get_commit_position(cwd))
+    else:
+        print("0")
+    sys.exit(0)
+
 elif operation == 'unpack':
     if len(sys.argv) < 3:
         sys.exit(usage)
@@ -97,13 +104,6 @@ elif operation == 'unpack':
         unpack_ref(ref_file, ref_file_full_path, packed_refs_full_path)
 
     sys.exit(0)
-elif operation == 'position':
-    if git_dir_exists:
-        print(get_commit_position(cwd))
-    else:
-        print("0")
-    sys.exit(0)
-
 if len(sys.argv) < 3 or operation != 'gen':
     sys.exit(usage)
 
@@ -121,12 +121,8 @@ if git_dir_exists:
     except:
         pass
 
-hfile = open(output_file, 'w')
-
-hfile.write('#define ANGLE_COMMIT_HASH "%s"\n' % commit_id)
-hfile.write('#define ANGLE_COMMIT_HASH_SIZE %d\n' % commit_id_size)
-hfile.write('#define ANGLE_COMMIT_DATE "%s"\n' % commit_date)
-hfile.write('#define ANGLE_COMMIT_POSITION %s\n' % commit_position)
-
-
-hfile.close()
+with open(output_file, 'w') as hfile:
+    hfile.write('#define ANGLE_COMMIT_HASH "%s"\n' % commit_id)
+    hfile.write('#define ANGLE_COMMIT_HASH_SIZE %d\n' % commit_id_size)
+    hfile.write('#define ANGLE_COMMIT_DATE "%s"\n' % commit_date)
+    hfile.write('#define ANGLE_COMMIT_POSITION %s\n' % commit_position)

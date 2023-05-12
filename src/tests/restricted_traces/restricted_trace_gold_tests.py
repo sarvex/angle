@@ -57,7 +57,7 @@ def temporary_dir(prefix=''):
     try:
         yield path
     finally:
-        logging.info("Removing temporary directory: %s" % path)
+        logging.info(f"Removing temporary directory: {path}")
         shutil.rmtree(path)
 
 
@@ -110,7 +110,7 @@ def add_skia_gold_args(parser):
 
 def run_angle_system_info_test(sysinfo_args, args, env):
     with temporary_dir() as temp_dir:
-        sysinfo_args += ['--render-test-output-dir=' + temp_dir]
+        sysinfo_args += [f'--render-test-output-dir={temp_dir}']
 
         result, _, _ = angle_test_util.RunTestSuite(
             'angle_system_info_test', sysinfo_args, env, use_xvfb=args.xvfb)
@@ -126,7 +126,7 @@ def to_hex(num):
 
 
 def to_hex_or_none(num):
-    return 'None' if num == None else to_hex(num)
+    return 'None' if num is None else to_hex(num)
 
 
 def to_non_empty_string_or_none(val):
@@ -134,7 +134,7 @@ def to_non_empty_string_or_none(val):
 
 
 def to_non_empty_string_or_none_dict(d, key):
-    return 'None' if not key in d else to_non_empty_string_or_none(d[key])
+    return 'None' if key not in d else to_non_empty_string_or_none(d[key])
 
 
 def get_skia_gold_keys(args, env):
@@ -160,23 +160,32 @@ def get_skia_gold_keys(args, env):
         os_name = to_non_empty_string_or_none(platform.system())
         os_version = to_non_empty_string_or_none(platform.version())
 
-    if len(json_data.get('gpus', [])) == 0 or not 'activeGPUIndex' in json_data:
+    if (
+        len(json_data.get('gpus', [])) == 0
+        or 'activeGPUIndex' not in json_data
+    ):
         raise Exception('Error getting system info.')
 
     active_gpu = json_data['gpus'][json_data['activeGPUIndex']]
 
-    angle_keys = {
+    return {
         'vendor_id': to_hex_or_none(active_gpu['vendorId']),
         'device_id': to_hex_or_none(active_gpu['deviceId']),
-        'model_name': to_non_empty_string_or_none_dict(active_gpu, 'machineModelVersion'),
-        'manufacturer_name': to_non_empty_string_or_none_dict(active_gpu, 'machineManufacturer'),
+        'model_name': to_non_empty_string_or_none_dict(
+            active_gpu, 'machineModelVersion'
+        ),
+        'manufacturer_name': to_non_empty_string_or_none_dict(
+            active_gpu, 'machineManufacturer'
+        ),
         'os': os_name,
         'os_version': os_version,
-        'driver_version': to_non_empty_string_or_none_dict(active_gpu, 'driverVersion'),
-        'driver_vendor': to_non_empty_string_or_none_dict(active_gpu, 'driverVendor'),
+        'driver_version': to_non_empty_string_or_none_dict(
+            active_gpu, 'driverVersion'
+        ),
+        'driver_vendor': to_non_empty_string_or_none_dict(
+            active_gpu, 'driverVendor'
+        ),
     }
-
-    return angle_keys
 
 
 def output_diff_local_files(gold_session, image_name):
@@ -199,8 +208,14 @@ def output_diff_local_files(gold_session, image_name):
 
 def get_trace_key_frame(trace):
     # read trace info
-    json_name = os.path.join(angle_path_util.ANGLE_ROOT_DIR, 'src', 'tests', 'restricted_traces',
-                             trace, trace + '.json')
+    json_name = os.path.join(
+        angle_path_util.ANGLE_ROOT_DIR,
+        'src',
+        'tests',
+        'restricted_traces',
+        trace,
+        f'{trace}.json',
+    )
     with open(json_name) as fp:
         trace_info = json.load(fp)
 
@@ -209,7 +224,7 @@ def get_trace_key_frame(trace):
     if 'KeyFrames' in trace_info['TraceMetadata']:
         # KeyFrames is an array, but we only use the first value for now
         keyframe = str(trace_info['TraceMetadata']['KeyFrames'][0])
-        logging.info('trace %s is using a keyframe of %s' % (trace, keyframe))
+        logging.info(f'trace {trace} is using a keyframe of {keyframe}')
 
     return keyframe
 
@@ -238,15 +253,15 @@ def upload_test_result_to_skia_gold(args, gold_session_manager, gold_session, go
     image_name = trace
     keyframe = get_trace_key_frame(trace)
     if keyframe != '':
-        image_name = trace + '_frame' + keyframe
-        logging.debug('Using %s as image_name for upload' % image_name)
+        image_name = f'{trace}_frame{keyframe}'
+        logging.debug(f'Using {image_name} as image_name for upload')
 
     # Note: this would be better done by iterating the screenshot directory.
     prefix = SWIFTSHADER_SCREENSHOT_PREFIX if args.swiftshader else DEFAULT_SCREENSHOT_PREFIX
     png_file_name = os.path.join(screenshot_dir, prefix + image_name + '.png')
 
     if not os.path.isfile(png_file_name):
-        raise Exception('Screenshot not found: ' + png_file_name)
+        raise Exception(f'Screenshot not found: {png_file_name}')
 
     if args.use_permissive_pixel_comparison:
         # These arguments cause Gold to use the sample area inexact matching
@@ -339,8 +354,8 @@ def _get_batches(traces, batch_size):
 
 
 def _get_gtest_filter_for_batch(args, batch):
-    expanded = ['%s%s' % (DEFAULT_TEST_PREFIX, trace) for trace in batch]
-    return '--gtest_filter=%s' % ':'.join(expanded)
+    expanded = [f'{DEFAULT_TEST_PREFIX}{trace}' for trace in batch]
+    return f"--gtest_filter={':'.join(expanded)}"
 
 
 def _run_tests(args, tests, extra_flags, env, screenshot_dir, results, test_results):
@@ -379,13 +394,13 @@ def _run_tests(args, tests, extra_flags, env, screenshot_dir, results, test_resu
                     gtest_filter,
                     '--run-to-key-frame',
                     '--verbose-logging',
-                    '--render-test-output-dir=%s' % screenshot_dir,
+                    f'--render-test-output-dir={screenshot_dir}',
                     '--save-screenshots',
                 ] + extra_flags
                 if args.swiftshader:
                     cmd_args += ['--use-angle=swiftshader']
 
-                logging.info('Running batch with args: %s' % cmd_args)
+                logging.info(f'Running batch with args: {cmd_args}')
                 result, _, json_results = angle_test_util.RunTestSuite(
                     args.test_suite, cmd_args, env, use_xvfb=args.xvfb)
                 if result == 0:
@@ -402,10 +417,10 @@ def _run_tests(args, tests, extra_flags, env, screenshot_dir, results, test_resu
                     if batch_result == PASS:
                         test_name = DEFAULT_TEST_PREFIX + trace
                         if json_results['tests'][test_name]['actual'] == 'SKIP':
-                            logging.info('Test skipped by suite: %s' % test_name)
+                            logging.info(f'Test skipped by suite: {test_name}')
                             result = SKIP
                         else:
-                            logging.debug('upload test result: %s' % trace)
+                            logging.debug(f'upload test result: {trace}')
                             result = upload_test_result_to_skia_gold(args, gold_session_manager,
                                                                      gold_session, gold_properties,
                                                                      screenshot_dir, trace,
@@ -415,7 +430,7 @@ def _run_tests(args, tests, extra_flags, env, screenshot_dir, results, test_resu
 
                     expected_result = SKIP if result == SKIP else PASS
                     test_results[trace] = {'expected': expected_result, 'actual': result}
-                    if len(artifacts) > 0:
+                    if artifacts:
                         test_results[trace]['artifacts'] = artifacts
                     if result == FAIL:
                         next_batch.append(trace)
@@ -461,15 +476,20 @@ def main():
         type=int,
         default=DEFAULT_BATCH_SIZE)
     parser.add_argument(
-        '-l', '--log', help='Log output level. Default is %s.' % DEFAULT_LOG, default=DEFAULT_LOG)
+        '-l',
+        '--log',
+        help=f'Log output level. Default is {DEFAULT_LOG}.',
+        default=DEFAULT_LOG,
+    )
     parser.add_argument('--swiftshader', help='Test with SwiftShader.', action='store_true')
     parser.add_argument(
         '-i',
         '--instance',
         '--gold-instance',
         '--skia-gold-instance',
-        help='Skia Gold instance. Default is "%s".' % DEFAULT_GOLD_INSTANCE,
-        default=DEFAULT_GOLD_INSTANCE)
+        help=f'Skia Gold instance. Default is "{DEFAULT_GOLD_INSTANCE}".',
+        default=DEFAULT_GOLD_INSTANCE,
+    )
     parser.add_argument(
         '--use-permissive-pixel-comparison',
         type=int,

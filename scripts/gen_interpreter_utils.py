@@ -128,17 +128,17 @@ def main(cpp_output_path):
     egl = registry_xml.GetEGL()
 
     def fn(ep):
-        return 'std::remove_pointer<PFN%sPROC>::type' % ep.upper()
+        return f'std::remove_pointer<PFN{ep.upper()}PROC>::type'
 
     fixture_functions, arg_counts = GetFunctionsFromFixture()
 
     eps_and_enums = sorted(list(set(gles.GetEnums() + egl.GetEnums())))
     parse_cases = [
-        PARSE_CASE.format(ep=ep, pfn=fn(ep), call='EntryPoint::%s' % enum)
+        PARSE_CASE.format(ep=ep, pfn=fn(ep), call=f'EntryPoint::{enum}')
         for (enum, ep) in eps_and_enums
     ]
     parse_cases += [
-        PARSE_CASE.format(ep=fn, pfn='decltype(%s)' % fn, call='"%s"' % fn)
+        PARSE_CASE.format(ep=fn, pfn=f'decltype({fn})', call=f'"{fn}"')
         for fn in fixture_functions
     ]
 
@@ -165,9 +165,7 @@ def main(cpp_output_path):
 
 if __name__ == '__main__':
     inputs = registry_xml.xml_inputs + [FIXTURE_H]
-    outputs = [
-        '%s.cpp' % BASE_PATH,
-    ]
+    outputs = [f'{BASE_PATH}.cpp']
 
     if len(sys.argv) > 1:
         if sys.argv[1] == 'inputs':

@@ -23,21 +23,26 @@ def ConvertToSkiaPerf(angle_metrics_json_files):
                                                                                      d['units']))
                     grouped_results[k].append(float(d['value']))
 
-    results = []
-    for k, v in grouped_results.items():
-        results.append({
+    results = [
+        {
             'key': dict(k),
             'measurements': {
-                'stat': [{
-                    'value': 'mean',
-                    'measurement': statistics.mean(v),
-                }, {
-                    'value': 'stdev',
-                    'measurement': statistics.stdev(v) if len(v) > 1 else 0,
-                }],
+                'stat': [
+                    {
+                        'value': 'mean',
+                        'measurement': statistics.mean(v),
+                    },
+                    {
+                        'value': 'stdev',
+                        'measurement': statistics.stdev(v)
+                        if len(v) > 1
+                        else 0,
+                    },
+                ],
             },
-        })
-
+        }
+        for k, v in grouped_results.items()
+    ]
     logging.info('angle_metrics to skia perf: %d entries' % len(results))
 
     return results

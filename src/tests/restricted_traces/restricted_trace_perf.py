@@ -59,7 +59,7 @@ SELECTED_DEVICE = ''
 Result = namedtuple('Result', ['process', 'time'])
 
 def run_command(args):
-    logging.debug('Running %s' % args)
+    logging.debug(f'Running {args}')
 
     start_time = time.time()
 
@@ -71,8 +71,9 @@ def run_command(args):
             stderr=subprocess.PIPE,
             universal_newlines=True)
     except subprocess.CalledProcessError as e:
-        raise RuntimeError("command '{}' return with error (code {}): {}".format(
-            e.cmd, e.returncode, e.output))
+        raise RuntimeError(
+            f"command '{e.cmd}' return with error (code {e.returncode}): {e.output}"
+        )
 
     process.wait()
 
@@ -82,7 +83,7 @@ def run_command(args):
 
 
 def run_async_command(args):
-    logging.debug('Kicking off gpumem subprocess %s' % (args))
+    logging.debug(f'Kicking off gpumem subprocess {args}')
 
     try:
         async_process = subprocess.Popen(
@@ -92,8 +93,9 @@ def run_async_command(args):
             shell=True,
             universal_newlines=True)
     except subprocess.CalledProcessError as e:
-        raise RuntimeError("command '{}' return with error (code {}): {}".format(
-            e.cmd, e.returncode, e.output))
+        raise RuntimeError(
+            f"command '{e.cmd}' return with error (code {e.returncode}): {e.output}"
+        )
 
     logging.debug('Done launching subprocess')
 
@@ -101,7 +103,7 @@ def run_async_command(args):
 
 
 def get_adb_dev():
-    return 'adb {} '.format(SELECTED_DEVICE)
+    return f'adb {SELECTED_DEVICE} '
 
 
 def run_adb_command(args):
@@ -124,7 +126,7 @@ def select_device(device_arg):
 
     result_header_end = result_dev_out.find('\n')
     result_dev_out = '' if result_header_end == -1 else result_dev_out[result_header_end:]
-    result_dev_out = result_dev_out.split()[0::2]
+    result_dev_out = result_dev_out.split()[::2]
 
     def print_device_list():
         print('\nList of available devices:\n{}'.format('\n'.join(result_dev_out)))
@@ -188,7 +190,7 @@ def get_trace_width(mode):
 def run_trace(trace, args):
     mode = get_mode(args)
     if mode != '':
-        mode = '_' + mode
+        mode = f'_{mode}'
 
     # Kick off a subprocess that collects peak gpu memory periodically
     # Note the 0.25 below is the delay (in seconds) between memory checks
@@ -196,9 +198,14 @@ def run_trace(trace, args):
     memory_command = 'shell sh /data/local/tmp/gpumem.sh 0.25'
     memory_process = run_async_adb_command(memory_command)
 
-    adb_command = 'shell am instrument -w '
-    adb_command += '-e org.chromium.native_test.NativeTestInstrumentationTestRunner.StdoutFile /sdcard/Download/out.txt '
-    adb_command += '-e org.chromium.native_test.NativeTest.CommandLineFlags "--gtest_filter=TraceTest.' + trace + '\ '
+    adb_command = (
+        'shell am instrument -w '
+        + '-e org.chromium.native_test.NativeTestInstrumentationTestRunner.StdoutFile /sdcard/Download/out.txt '
+    )
+    adb_command += (
+        f'-e org.chromium.native_test.NativeTest.CommandLineFlags "--gtest_filter=TraceTest.{trace}'
+        + '\ '
+    )
     adb_command += '--use-gl=native\ '
     if args.maxsteps != '':
         adb_command += '--max-steps-performed\ ' + args.maxsteps + '\ '
@@ -228,7 +235,7 @@ def get_test_time():
 
     while True:
         line = result.process.stdout.readline()
-        logging.debug('Checking line: %s' % line)
+        logging.debug(f'Checking line: {line}')
         if not line:
             break
 
@@ -241,7 +248,7 @@ def get_test_time():
         # Check for skipped tests
         if "Test skipped due to missing extension" in line:
             missing_ext = line.split()[-1]
-            logging.debug('Skipping test due to missing extension: %s' % missing_ext)
+            logging.debug(f'Skipping test due to missing extension: {missing_ext}')
             measured_time = missing_ext
             break
 
@@ -273,20 +280,20 @@ def get_gpu_memory(trace_duration):
     gpu_mem_sustained = []
     while True:
         line = result.process.stdout.readline()
-        logging.debug('Checking line: %s' % line)
+        logging.debug(f'Checking line: {line}')
         if not line:
             break
 
         if "time_elapsed" in line:
             time_elapsed = line.split()[-1]
-            logging.debug('time_elapsed: %s' % time_elapsed)
+            logging.debug(f'time_elapsed: {time_elapsed}')
             continue
 
         # Look for this line and grab the last entry:
         #   com.android.angle.test:test_process 31933
         if "com.android.angle.test" in line:
             test_process = line.split()[-1]
-            logging.debug('test_process: %s' % test_process)
+            logging.debug(f'test_process: {test_process}')
             continue
 
         # If we don't know test process yet, break
@@ -299,21 +306,18 @@ def get_gpu_memory(trace_duration):
         #   Proc 31933 total: 235184128
         if test_process in line:
             gpu_mem_entry = line.split()[-1]
-            logging.debug('Adding: %s to gpu_mem' % gpu_mem_entry)
+            logging.debug(f'Adding: {gpu_mem_entry} to gpu_mem')
             gpu_mem.append(int(gpu_mem_entry))
             # logging.debug('gpu_mem contains: %i' % ' '.join(gpu_mem))
             if safe_cast_float(time_elapsed) >= (safe_cast_float(trace_duration) / 2):
                 # Start tracking sustained memory usage at the half way point
-                logging.debug('Adding: %s to gpu_mem_sustained' % gpu_mem_entry)
+                logging.debug(f'Adding: {gpu_mem_entry} to gpu_mem_sustained')
                 gpu_mem_sustained.append(int(gpu_mem_entry))
             continue
 
-    gpu_mem_max = 0
-    if len(gpu_mem) != 0:
-        gpu_mem_max = max(gpu_mem)
-
+    gpu_mem_max = max(gpu_mem, default=0)
     gpu_mem_average = 0
-    if len(gpu_mem_sustained) != 0:
+    if gpu_mem_sustained:
         gpu_mem_average = statistics.mean(gpu_mem_sustained)
 
     return gpu_mem_average, gpu_mem_max
@@ -328,7 +332,7 @@ def get_proc_memory():
     while True:
         # Look for "memory_max" in the line and grab the second to last entry:
         line = result.process.stdout.readline()
-        logging.debug('Checking line: %s' % line)
+        logging.debug(f'Checking line: {line}')
         if not line:
             break
 
@@ -351,7 +355,7 @@ def get_gpu_time():
     while True:
         # Look for "gpu_time" in the line and grab the second to last entry:
         line = result.process.stdout.readline()
-        logging.debug('Checking line: %s' % line)
+        logging.debug(f'Checking line: {line}')
         if not line:
             break
 
@@ -370,7 +374,7 @@ def get_cpu_time():
     while True:
         # Look for "cpu_time" in the line and grab the second to last entry:
         line = result.process.stdout.readline()
-        logging.debug('Checking line: %s' % line)
+        logging.debug(f'Checking line: {line}')
         if not line:
             break
 
@@ -389,14 +393,14 @@ def get_frame_count():
 
     while True:
         line = result.process.stdout.readline()
-        logging.debug('Checking line: %s' % line)
+        logging.debug(f'Checking line: {line}')
         if not line:
             break
         if "trial_steps" in line:
             frame_count = line.split()[-2]
             break
 
-    logging.debug('Frame count: %s' % frame_count)
+    logging.debug(f'Frame count: {frame_count}')
     return frame_count
 
 
@@ -411,13 +415,12 @@ class GPUPowerStats():
         self.little_cpu_power = 0
 
     def get_gpu_power(self, device_number):
-        gpu_power_command = 'shell "'
-        gpu_power_command += 'cat /sys/bus/iio/devices/iio:device'
+        gpu_power_command = 'shell "' + 'cat /sys/bus/iio/devices/iio:device'
         gpu_power_command += device_number
         gpu_power_command += '/energy_value'
         gpu_power_command += '"'
 
-        logging.debug("gpu_power_command %s" % gpu_power_command)
+        logging.debug(f"gpu_power_command {gpu_power_command}")
 
         gpu_result = run_adb_command(gpu_power_command)
 
@@ -438,19 +441,17 @@ class GPUPowerStats():
         # Read the starting power
         while True:
             line = gpu_result.process.stdout.readline()
-            logging.debug('Checking line: %s' % line)
+            logging.debug(f'Checking line: {line}')
             if not line:
                 break
             if "S2S_VDD_G3D" in line:
                 self.gpu_power = line.split()[1]
                 break
 
-        logging.debug("self.gpu_power %s" % self.gpu_power)
+        logging.debug(f"self.gpu_power {self.gpu_power}")
 
     def get_cpu_power(self, device_number):
-        # Also grab the sum of CPU powers
-        cpu_power_command = 'shell "'
-        cpu_power_command += 'cat /sys/bus/iio/devices/iio:device'
+        cpu_power_command = 'shell "' + 'cat /sys/bus/iio/devices/iio:device'
         cpu_power_command += device_number
         cpu_power_command += '/energy_value'
         cpu_power_command += '"'
@@ -471,39 +472,40 @@ class GPUPowerStats():
         # Sum up the CPU parts
         while True:
             line = cpu_result.process.stdout.readline()
-            logging.debug('Checking line: %s' % line)
+            logging.debug(f'Checking line: {line}')
             if not line:
                 break
             if "S2M_VDD_CPUCL2" in line:
                 self.big_cpu_power = line.split()[1]
                 break
-        logging.debug("self.big_cpu_power %s" % self.big_cpu_power)
+        logging.debug(f"self.big_cpu_power {self.big_cpu_power}")
 
         while True:
             line = cpu_result.process.stdout.readline()
-            logging.debug('Checking line: %s' % line)
+            logging.debug(f'Checking line: {line}')
             if not line:
                 break
             if "S3M_VDD_CPUCL1" in line:
                 self.mid_cpu_power = line.split()[1]
                 break
-        logging.debug("self.mid_cpu_power %s" % self.mid_cpu_power)
+        logging.debug(f"self.mid_cpu_power {self.mid_cpu_power}")
 
         while True:
             line = cpu_result.process.stdout.readline()
-            logging.debug('Checking line: %s' % line)
+            logging.debug(f'Checking line: {line}')
             if not line:
                 break
             if "S2M_VDD_CPUCL0" in line:
                 self.little_cpu_power = line.split()[1]
                 break
-        logging.debug("self.little_cpu_power %s" % self.little_cpu_power)
+        logging.debug(f"self.little_cpu_power {self.little_cpu_power}")
 
     def get_power_data(self):
 
         logging.debug('Checking where CPU and GPU data are mapped on enabled_rails')
-        enabled_rails_command = 'shell "'
-        enabled_rails_command += 'cat /sys/bus/iio/devices/iio:device0/enabled_rails'
+        enabled_rails_command = (
+            'shell "' + 'cat /sys/bus/iio/devices/iio:device0/enabled_rails'
+        )
         enabled_rails_command += '"'
 
         enabled_rails_result = run_adb_command(enabled_rails_command)
@@ -512,7 +514,7 @@ class GPUPowerStats():
         rails0 = ''
         while True:
             line = enabled_rails_result.process.stdout.readline()
-            logging.debug('Checking line: %s' % line)
+            logging.debug(f'Checking line: {line}')
             if not line:
                 break
             if "S2S_VDD_G3D" in line:
@@ -552,21 +554,15 @@ def drop_high_low_and_average(values):
 
 
 def safe_divide(x, y):
-    if y == 0:
-        return 0
-    return x / y
+    return 0 if y == 0 else x / y
 
 
 def safe_cast_float(x):
-    if x == '':
-        return 0
-    return float(x)
+    return 0 if x == '' else float(x)
 
 
 def safe_cast_int(x):
-    if x == '':
-        return 0
-    return int(x)
+    return 0 if x == '' else int(x)
 
 
 def percent(x):
@@ -638,10 +634,10 @@ def main():
 
     # Add an underscore to the mode for use in loop below
     if mode != '':
-        mode = mode + '_'
+        mode = f'{mode}_'
 
     # Create output CSV
-    raw_data_filename = "raw_data." + args.output_tag + ".csv"
+    raw_data_filename = f"raw_data.{args.output_tag}.csv"
     output_file = open(raw_data_filename, 'w', newline='')
     output_writer = csv.writer(output_file)
 
@@ -745,7 +741,7 @@ def main():
                     logging.debug('Starting little CPU power: %i' %
                                   int(starting_power.little_cpu_power))
 
-                logging.debug('Running %s' % test)
+                logging.debug(f'Running {test}')
                 test_time = run_trace(test, args)
 
                 if args.power:
@@ -771,7 +767,7 @@ def main():
                     if frame_count > 0:
                         consumed_gpu_power = int(ending_power.gpu_power) - int(
                             starting_power.gpu_power)
-                        gpu_power_per_frame = consumed_gpu_power / int(frame_count)
+                        gpu_power_per_frame = consumed_gpu_power / frame_count
                         consumed_big_cpu_power = int(ending_power.big_cpu_power) - int(
                             starting_power.big_cpu_power)
                         consumed_mid_cpu_power = int(ending_power.mid_cpu_power) - int(
@@ -779,7 +775,7 @@ def main():
                         consumed_little_cpu_power = int(ending_power.little_cpu_power) - int(
                             starting_power.little_cpu_power)
                         consumed_cpu_power = consumed_big_cpu_power + consumed_mid_cpu_power + consumed_little_cpu_power
-                        cpu_power_per_frame = consumed_cpu_power / int(frame_count)
+                        cpu_power_per_frame = consumed_cpu_power / frame_count
 
                 gpu_mem_sustained, gpu_mem_peak = get_gpu_memory(test_time)
                 logging.debug(
@@ -862,7 +858,7 @@ def main():
 
     # Generate the SUMMARY output
 
-    summary_file = open("summary." + args.output_tag + ".csv", 'w', newline='')
+    summary_file = open(f"summary.{args.output_tag}.csv", 'w', newline='')
     summary_writer = csv.writer(summary_file)
 
     android_result = run_adb_command('shell getprop ro.build.fingerprint')
@@ -944,9 +940,8 @@ def main():
         if "native" in data and "vulkan" in data:
             # The remaining code in this script expects both native and vulkan results
             break
-        else:
-            logging.info("Skipping summary file due to single renderer")
-            exit()
+        logging.info("Skipping summary file due to single renderer")
+        exit()
 
     # Write the summary file
     trace_number = 0

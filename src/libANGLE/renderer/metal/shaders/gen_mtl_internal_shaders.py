@@ -52,11 +52,7 @@ def gen_shader_enums_code(angle_formats):
 
 
 def find_clang():
-    if os.name == 'nt':
-        binary = 'clang-cl.exe'
-    else:
-        binary = 'clang++'
-
+    binary = 'clang-cl.exe' if os.name == 'nt' else 'clang++'
     clang = os.path.join('..', '..', '..', '..', '..', 'third_party', 'llvm-build',
                          'Release+Asserts', 'bin', binary)
 
@@ -116,11 +112,11 @@ def main():
     temp_fname = 'temp_master_source.metal'
     with open(temp_fname, 'wb') as temp_file:
         for src_file in src_files:
-            include_str = '#include "' + src_file + '" \n'
+            include_str = f'#include "{src_file}' + '" \n'
             temp_file.write(include_str.encode('utf-8'))
 
     args = [clang]
-    if not os.name == 'nt':
+    if os.name != 'nt':
         args += ['-xc++']
     args += ['-E', temp_fname]
 

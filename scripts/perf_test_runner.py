@@ -49,8 +49,7 @@ def mean(data):
 
 def sum_of_square_deviations(data, c):
     """Return sum of square deviations of sequence data."""
-    ss = sum((float(x) - c)**2 for x in data)
-    return ss
+    return sum((float(x) - c)**2 for x in data)
 
 
 def coefficient_of_variation(data):
@@ -86,13 +85,15 @@ def main(raw_args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--suite',
-        help='Test suite binary. Default is "%s".' % DEFAULT_TEST_SUITE,
-        default=DEFAULT_TEST_SUITE)
+        help=f'Test suite binary. Default is "{DEFAULT_TEST_SUITE}".',
+        default=DEFAULT_TEST_SUITE,
+    )
     parser.add_argument(
         '-m',
         '--metric',
-        help='Test metric. Default is "%s".' % DEFAULT_METRIC,
-        default=DEFAULT_METRIC)
+        help=f'Test metric. Default is "{DEFAULT_METRIC}".',
+        default=DEFAULT_METRIC,
+    )
     parser.add_argument(
         '--experiments',
         help='Number of experiments to run. Default is %d.' % DEFAULT_EXPERIMENTS,
@@ -122,33 +123,33 @@ def main(raw_args):
 
     perftests_path = newest_binary
 
-    if perftests_path == None or not os.path.exists(perftests_path):
-        print('Cannot find %s in %s!' % (args.suite, TEST_SUITE_SEARCH_PATH))
+    if perftests_path is None or not os.path.exists(perftests_path):
+        print(f'Cannot find {args.suite} in {TEST_SUITE_SEARCH_PATH}!')
         return EXIT_FAILURE
 
-    print('Using test executable: %s' % perftests_path)
-    print('Test name: %s' % args.test_name)
+    print(f'Using test executable: {perftests_path}')
+    print(f'Test name: {args.test_name}')
 
     def get_results(metric, extra_args=[]):
-        run = [perftests_path, '--gtest_filter=%s' % args.test_name] + extra_args
-        logging.info('running %s' % str(run))
+        run = [perftests_path, f'--gtest_filter={args.test_name}'] + extra_args
+        logging.info(f'running {str(run)}')
         process = subprocess.Popen(
             run, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8')
         output, err = process.communicate()
 
         m = re.search(r'Running (\d+) tests', output)
-        if m and int(m.group(1)) > 1:
+        if m and int(m[1]) > 1:
             print(output)
             raise Exception('Found more than one test result in output')
 
         # Results are reported in the format:
         # name_backend.metric: story= value units.
         pattern = r'\.' + metric + r':.*= ([0-9.]+)'
-        logging.debug('searching for %s in output' % pattern)
+        logging.debug(f'searching for {pattern} in output')
         m = re.findall(pattern, output)
         if not m:
             print(output)
-            raise Exception('Did not find the metric "%s" in the test output' % metric)
+            raise Exception(f'Did not find the metric "{metric}" in the test output')
 
         return [float(value) for value in m]
 

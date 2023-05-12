@@ -52,8 +52,9 @@ def main(raw_args):
         '-l',
         '--log',
         '--log-level',
-        help='Logging level. Default is %s.' % DEFAULT_LOG_LEVEL,
-        default=DEFAULT_LOG_LEVEL)
+        help=f'Logging level. Default is {DEFAULT_LOG_LEVEL}.',
+        default=DEFAULT_LOG_LEVEL,
+    )
 
     subparser = parser.add_subparsers(dest='command')
 
@@ -85,7 +86,7 @@ def main(raw_args):
 
     logging.basicConfig(level=args.log.upper())
 
-    assert os.path.exists(MESON), 'Could not find meson.py: %s' % MESON
+    assert os.path.exists(MESON), f'Could not find meson.py: {MESON}'
 
     if args.command == 'mesa':
         SetupBuild(args.build_dir, MESA_SOURCE_DIR, MESA_OPTIONS)
@@ -111,25 +112,27 @@ def SetupBuild(build_dir, source_dir, options, pkg_config_paths=[]):
 
     sysroot_dir = os.path.join(ANGLE_DIR, 'build', 'linux', 'debian_bullseye_amd64-sysroot')
 
-    cflags = ' '.join([
-        '--sysroot=%s' % sysroot_dir,
-        '-Wno-constant-conversion',
-        '-Wno-deprecated-builtins',
-        '-Wno-deprecated-declarations',
-        '-Wno-deprecated-non-prototype',
-        '-Wno-enum-compare-conditional',
-        '-Wno-enum-conversion',
-        '-Wno-implicit-const-int-float-conversion',
-        '-Wno-implicit-function-declaration',
-        '-Wno-initializer-overrides',
-        '-Wno-sometimes-uninitialized',
-        '-Wno-unused-but-set-variable',
-        '-Wno-unused-function',
-    ])
+    cflags = ' '.join(
+        [
+            f'--sysroot={sysroot_dir}',
+            '-Wno-constant-conversion',
+            '-Wno-deprecated-builtins',
+            '-Wno-deprecated-declarations',
+            '-Wno-deprecated-non-prototype',
+            '-Wno-enum-compare-conditional',
+            '-Wno-enum-conversion',
+            '-Wno-implicit-const-int-float-conversion',
+            '-Wno-implicit-function-declaration',
+            '-Wno-initializer-overrides',
+            '-Wno-sometimes-uninitialized',
+            '-Wno-unused-but-set-variable',
+            '-Wno-unused-function',
+        ]
+    )
 
     pkg_config_paths += [
-        '%s/usr/share/pkgconfig' % sysroot_dir,
-        '%s/usr/lib/pkgconfig' % sysroot_dir
+        f'{sysroot_dir}/usr/share/pkgconfig',
+        f'{sysroot_dir}/usr/lib/pkgconfig',
     ]
 
     extra_env = {
@@ -209,7 +212,8 @@ def GenerateGni(args):
                                                                libdrm_outputs_filter)
 
     fmt_list = lambda l, rp: ''.join(
-        sorted(list(set(['  "%s",\n' % os.path.relpath(li, rp) for li in l]))))
+        sorted(list({'  "%s",\n' % os.path.relpath(li, rp) for li in l}))
+    )
 
     format_args = {
         'script_name': os.path.basename(__file__),
@@ -225,7 +229,7 @@ def GenerateGni(args):
     with open(args.output, 'w') as outf:
         outf.write(gni_text)
         outf.close()
-        logging.info('Saved GNI data to %s' % args.output)
+        logging.info(f'Saved GNI data to {args.output}')
 
 
 def GetMesonSourcesAndOutputs(build_dir, sources_filter, output_filter):
@@ -245,7 +249,7 @@ def GetMesonSourcesAndOutputs(build_dir, sources_filter, output_filter):
     sources = list(filter(lambda s: (s not in generated), all_sources))
 
     for source in sources:
-        assert os.path.exists(source), '%s does not exist' % source
+        assert os.path.exists(source), f'{source} does not exist'
 
     return sources, outputs
 
@@ -257,14 +261,16 @@ def Meson(build_dir, command, args, extra_env={}, stdout=None):
         env[k] = v
     # TODO: Remove when crbug.com/1373441 is fixed.
     env['VPYTHON_DEFAULT_SPEC'] = os.path.join(ANGLE_DIR, '.vpython3')
-    logging.info(' '.join(['%s=%s' % (k, v) for (k, v) in extra_env.items()] + meson_cmd))
+    logging.info(
+        ' '.join([f'{k}={v}' for (k, v) in extra_env.items()] + meson_cmd)
+    )
     completed = subprocess.run(meson_cmd, env=env, stdout=stdout)
     if completed.returncode != EXIT_SUCCESS:
         logging.fatal('Got error from meson:')
         with open(os.path.join(build_dir, 'meson-logs', 'meson-log.txt')) as logf:
             lines = logf.readlines()
             for line in lines[-10:]:
-                logging.fatal('  %s' % line.strip())
+                logging.fatal(f'  {line.strip()}')
         sys.exit(EXIT_FAILURE)
     if stdout:
         return completed.stdout
@@ -282,7 +288,7 @@ def Stamp(args, source_dir, output):
     with open(output, 'w') as outf:
         outf.write(commit_id)
         outf.close()
-        logging.info('Saved git hash data to %s' % output)
+        logging.info(f'Saved git hash data to {output}')
 
 
 def GrabOutput(command, cwd):
@@ -291,11 +297,11 @@ def GrabOutput(command, cwd):
 
 
 def LazySetup(args, build_dir):
-    stamp = args.target + '.stamp'
+    stamp = f'{args.target}.stamp'
     in_stamp = os.path.join(SCRIPT_DIR, stamp)
     out_stamp = os.path.join(build_dir, args.target, stamp)
     if not args.wipe and SameStamps(in_stamp, out_stamp):
-        logging.info('%s setup up-to-date.' % args.target)
+        logging.info(f'{args.target} setup up-to-date.')
         sys.exit(EXIT_SUCCESS)
 
     if args.target == 'mesa':
@@ -310,7 +316,7 @@ def LazySetup(args, build_dir):
 
     SetupBuild(os.path.join(build_dir, args.target), source_dir, options, pkg_config_paths)
     shutil.copyfile(in_stamp, out_stamp)
-    logging.info('Finished setup and updated %s.' % out_stamp)
+    logging.info(f'Finished setup and updated {out_stamp}.')
 
 
 def SameStamps(in_stamp, out_stamp):

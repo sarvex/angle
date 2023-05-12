@@ -117,9 +117,10 @@ def parse_type_case(type, result):
 
 
 def parse_format_case(format, type_map):
-    type_cases = ""
-    for type, internal_format in sorted(type_map.items()):
-        type_cases += parse_type_case(type, internal_format)
+    type_cases = "".join(
+        parse_type_case(type, internal_format)
+        for type, internal_format in sorted(type_map.items())
+    )
     return template_format_case.format(format=format, type_cases=type_cases)
 
 
@@ -127,12 +128,12 @@ def main():
 
     # auto_script parameters.
     if len(sys.argv) > 1:
-        inputs = [
-            'renderer/angle_format.py', 'es3_format_type_combinations.json', 'format_map_data.json'
-        ]
         outputs = ['format_map_autogen.cpp']
 
         if sys.argv[1] == 'inputs':
+            inputs = [
+                'renderer/angle_format.py', 'es3_format_type_combinations.json', 'format_map_data.json'
+            ]
             print(','.join(inputs))
         elif sys.argv[1] == 'outputs':
             print(','.join(outputs))
@@ -145,11 +146,10 @@ def main():
 
     format_map = angle_format.load_json(input_script)
 
-    format_cases = ""
-
-    for format, type_map in sorted(format_map.items()):
-        format_cases += parse_format_case(format, type_map)
-
+    format_cases = "".join(
+        parse_format_case(format, type_map)
+        for format, type_map in sorted(format_map.items())
+    )
     combo_data_file = 'es3_format_type_combinations.json'
     es3_combo_data = angle_format.load_json(combo_data_file)
     combo_data = [combo for sublist in es3_combo_data.values() for combo in sublist]
@@ -168,25 +168,21 @@ def main():
         else:
             combos[format][type] += [internal_format]
 
-    es3_format_cases = ""
-
-    for format in sorted(formats):
-        es3_format_cases += "        case " + format + ":\n"
-
-    es3_type_cases = ""
-
-    for type in sorted(types):
-        es3_type_cases += "        case " + type + ":\n"
-
+    es3_format_cases = "".join(
+        f"        case {format}" + ":\n" for format in sorted(formats)
+    )
+    es3_type_cases = "".join(
+        f"        case {type}" + ":\n" for type in sorted(types)
+    )
     es3_combo_cases = ""
 
     for format, type_combos in sorted(combos.items()):
         this_type_cases = ""
         for type, combos in sorted(type_combos.items()):
-            internal_format_cases = ""
-            for internal_format in combos:
-                internal_format_cases += "                        case " + internal_format + ":\n"
-
+            internal_format_cases = "".join(
+                f"                        case {internal_format}" + ":\n"
+                for internal_format in combos
+            )
             this_type_cases += template_es3_combo_type_case.format(
                 type=type, internal_format_cases=internal_format_cases)
 

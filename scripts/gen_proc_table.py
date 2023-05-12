@@ -176,7 +176,7 @@ def main():
 
     # auto_script parameters.
     if len(sys.argv) > 1:
-        inputs = [source for source in registry_xml.xml_inputs]
+        inputs = list(registry_xml.xml_inputs)
         outputs = [
             out_file_name_gles, out_file_name_wgl, out_file_name_glx, out_file_name_cl,
             out_file_name_cl_map
@@ -209,7 +209,7 @@ def main():
         name_no_suffix = name
         for suffix in strip_suffixes:
             if name_no_suffix.endswith(suffix):
-                name_no_suffix = name_no_suffix[0:-len(suffix)]
+                name_no_suffix = name_no_suffix[:-len(suffix)]
 
     gles_data = glesxml.all_cmd_names.get_all_commands()
     eglxml = registry_xml.RegistryXML('egl.xml', 'egl_angle_ext.xml')
@@ -233,15 +233,15 @@ def main():
         feature_name = "{}{}".format(name_prefix, annotation)
         glxml.AddCommands(feature_name, annotation)
 
-    gl_data = set([cmd for cmd in glxml.all_cmd_names.get_all_commands()])
+    gl_data = set(list(glxml.all_cmd_names.get_all_commands()))
 
     all_gl_data = list(set(gles_data).union(gl_data))
     all_functions = {}
     for function in all_gl_data:
         if function.startswith("gl"):
-            all_functions[function] = "GL_" + function[2:]
+            all_functions[function] = f"GL_{function[2:]}"
         elif function.startswith("egl"):
-            all_functions[function] = "EGL_" + function[3:]
+            all_functions[function] = f"EGL_{function[3:]}"
         else:
             all_functions[function] = function
 
@@ -249,7 +249,7 @@ def main():
     gl_only_data = gl_data.difference(gles_data)
     for func, angle_func in sorted(all_functions.items()):
         if func in gl_only_data:
-            proc_data.append('    DESKTOP_ONLY("%s", %s)' % (func, angle_func))
+            proc_data.append(f'    DESKTOP_ONLY("{func}", {angle_func})')
         else:
             proc_data.append('    {"%s", P(%s)},' % (func, angle_func))
 
@@ -314,11 +314,11 @@ def main():
     for major_version, minor_version in registry_xml.CL_VERSIONS:
         name_prefix = "CL_VERSION_"
         annotation = "%d_%d" % (major_version, minor_version)
-        feature_name = "%s%s" % (name_prefix, annotation)
+        feature_name = f"{name_prefix}{annotation}"
         clxml.AddCommands(feature_name, annotation)
         symbol_version = "OPENCL_%d.%d" % (major_version, minor_version)
         symbol_maps += ["\n%s {\n    global:" % symbol_version]
-        symbol_maps += ['        %s;' % cmd for cmd in clxml.commands[annotation]]
+        symbol_maps += [f'        {cmd};' for cmd in clxml.commands[annotation]]
         if not symbol_map_dependency:
             symbol_maps += ["    local:\n        *;\n};"]
         else:

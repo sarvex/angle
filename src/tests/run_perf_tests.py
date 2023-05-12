@@ -74,13 +74,13 @@ def _shard_tests(tests, shard_count, shard_index):
 
 def _get_results_from_output(output, result):
     m = re.search(r'Running (\d+) tests', output)
-    if m and int(m.group(1)) > 1:
+    if m and int(m[1]) > 1:
         raise Exception('Found more than one test result in output')
 
     # Results are reported in the format:
     # name_backend.result: story= value units.
     pattern = r'\.' + result + r':.*= ([0-9.]+)'
-    logging.debug('Searching for %s in output' % pattern)
+    logging.debug(f'Searching for {pattern} in output')
     m = re.findall(pattern, output)
     if not m:
         logging.warning('Did not find the result "%s" in the test output:\n%s' % (result, output))
@@ -106,8 +106,7 @@ def _mean(data):
 
 def _sum_of_square_deviations(data, c):
     """Return sum of square deviations of sequence data."""
-    ss = sum((float(x) - c)**2 for x in data)
-    return ss
+    return sum((float(x) - c)**2 for x in data)
 
 
 def _coefficient_of_variation(data):
@@ -132,7 +131,7 @@ def _save_extra_output_files(args, results, histograms, metrics):
     test_output_path = os.path.join(benchmark_path, 'test_results.json')
     results.save_to_json_file(test_output_path)
     perf_output_path = os.path.join(benchmark_path, 'perf_results.json')
-    logging.info('Saving perf histograms to %s.' % perf_output_path)
+    logging.info(f'Saving perf histograms to {perf_output_path}.')
     with open(perf_output_path, 'w') as out_file:
         out_file.write(json.dumps(histograms.AsDicts(), indent=2))
 
@@ -193,7 +192,7 @@ class Results:
             out_file.write(json.dumps(self._results, indent=2))
 
     def save_to_json_file(self, fname):
-        logging.info('Saving test results to %s.' % fname)
+        logging.info(f'Saving test results to {fname}.')
         with open(fname, 'w') as out_file:
             out_file.write(json.dumps(self._results, indent=2))
 
@@ -220,7 +219,7 @@ def _read_metrics(metrics_file_path):
 
 def _merge_into_one_histogram(test_histogram_set):
     with common.temporary_file() as merge_histogram_path:
-        logging.info('Writing merged histograms to %s.' % merge_histogram_path)
+        logging.info(f'Writing merged histograms to {merge_histogram_path}.')
         with open(merge_histogram_path, 'w') as merge_histogram_file:
             json.dump(test_histogram_set.AsDicts(), merge_histogram_file)
             merge_histogram_file.close()
@@ -296,8 +295,8 @@ def _run_perf(args, common_args, env, steps_per_trial=None):
 
     with temporary_dir() as render_output_dir:
         histogram_file_path = os.path.join(render_output_dir, 'histogram')
-        run_args += ['--isolated-script-test-perf-output=%s' % histogram_file_path]
-        run_args += ['--render-test-output-dir=%s' % render_output_dir]
+        run_args += [f'--isolated-script-test-perf-output={histogram_file_path}']
+        run_args += [f'--render-test-output-dir={render_output_dir}']
 
         exit_code, output, json_results = _run_test_suite(args, run_args, env)
         if exit_code != EXIT_SUCCESS:
@@ -305,9 +304,9 @@ def _run_perf(args, common_args, env, steps_per_trial=None):
         if SKIP in json_results['num_failures_by_type']:
             return SKIP, None, None
 
-        sample_metrics = _read_metrics(os.path.join(render_output_dir, 'angle_metrics'))
-
-        if sample_metrics:
+        if sample_metrics := _read_metrics(
+            os.path.join(render_output_dir, 'angle_metrics')
+        ):
             sample_histogram = _read_histogram(histogram_file_path)
             return PASS, sample_metrics, sample_histogram
 
@@ -320,12 +319,14 @@ class _MaxErrorsException(Exception):
 
 def _skipped_or_glmark2(test, test_status):
     if test_status == SKIP:
-        logging.info('Test skipped by suite: %s' % test)
+        logging.info(f'Test skipped by suite: {test}')
         return True
 
     # GLMark2Benchmark logs .fps/.score instead of our perf metrics.
     if test.startswith('GLMark2Benchmark.Run/'):
-        logging.info('GLMark2Benchmark missing metrics (as expected, skipping): %s' % test)
+        logging.info(
+            f'GLMark2Benchmark missing metrics (as expected, skipping): {test}'
+        )
         return True
 
     return False
@@ -351,10 +352,7 @@ def _run_tests(tests, args, extra_flags, env):
                 android_helper.PrepareRestrictedTraces([trace])
                 prepared_traces.add(trace)
 
-        common_args = [
-            '--gtest_filter=%s' % test,
-            '--verbose',
-        ] + extra_flags
+        common_args = ([f'--gtest_filter={test}', '--verbose'] + extra_flags)
 
         if args.steps_per_trial:
             steps_per_trial = args.steps_per_trial
@@ -373,7 +371,7 @@ def _run_tests(tests, args, extra_flags, env):
                 continue
 
             if not steps_per_trial:
-                logging.error('Test %s missing steps_per_trial' % test)
+                logging.error(f'Test {test} missing steps_per_trial')
                 results.result_fail(test)
                 continue
             trial_limit = 'steps_per_trial=%d' % steps_per_trial
@@ -402,7 +400,7 @@ def _run_tests(tests, args, extra_flags, env):
                 break
 
             if not sample_metrics:
-                logging.error('Test %s failed to produce a sample output' % test)
+                logging.error(f'Test {test} failed to produce a sample output')
                 results.result_fail(test)
                 break
 
@@ -426,8 +424,7 @@ def _run_tests(tests, args, extra_flags, env):
 
         if not results.has_result(test):
             assert len(wall_times) == (args.samples_per_test * args.trials_per_sample)
-            stats = _wall_times_stats(wall_times)
-            if stats:
+            if stats := _wall_times_stats(wall_times):
                 logging.info('Test %d/%d: %s: %s' % (test_index + 1, len(tests), test, stats))
             histograms.Merge(_merge_into_one_histogram(test_histogram_set))
             results.result_pass(test)
@@ -455,7 +452,7 @@ def _find_test_suite_directory(test_suite):
                 newest_mtime = binary_mtime
 
     if newest_binary:
-        logging.info('Found %s in %s' % (test_suite, os.path.dirname(newest_binary)))
+        logging.info(f'Found {test_suite} in {os.path.dirname(newest_binary)}')
         return os.path.dirname(newest_binary)
     return None
 
@@ -477,7 +474,7 @@ def _should_lock_gpu_clocks():
         # expected in some cases, e.g. non-nvidia bots
         return False
 
-    logging.info('nvidia-smi --query-gpu=gpu_name output: %s' % gpu_info)
+    logging.info(f'nvidia-smi --query-gpu=gpu_name output: {gpu_info}')
 
     return gpu_info.strip() == 'GeForce GTX 1660'
 
@@ -485,7 +482,7 @@ def _should_lock_gpu_clocks():
 def _log_nvidia_gpu_temperature():
     t = subprocess.check_output(
         ['nvidia-smi', '--query-gpu=temperature.gpu', '--format=csv,noheader']).decode().strip()
-    logging.info('Current GPU temperature: %s ' % t)
+    logging.info(f'Current GPU temperature: {t} ')
 
 
 @contextlib.contextmanager
@@ -496,13 +493,13 @@ def _maybe_lock_gpu_clocks():
 
     # Lock to 1410Mhz (`nvidia-smi --query-supported-clocks=gr --format=csv`)
     lgc_out = subprocess.check_output(['nvidia-smi', '--lock-gpu-clocks=1410,1410']).decode()
-    logging.info('Lock GPU clocks output: %s' % lgc_out)
+    logging.info(f'Lock GPU clocks output: {lgc_out}')
     _log_nvidia_gpu_temperature()
     try:
         yield
     finally:
         rgc_out = subprocess.check_output(['nvidia-smi', '--reset-gpu-clocks']).decode()
-        logging.info('Reset GPU clocks output: %s' % rgc_out)
+        logging.info(f'Reset GPU clocks output: {rgc_out}')
         _log_nvidia_gpu_temperature()
 
 
@@ -532,7 +529,11 @@ def main():
         type=int,
         default=0)
     parser.add_argument(
-        '-l', '--log', help='Log output level. Default is %s.' % DEFAULT_LOG, default=DEFAULT_LOG)
+        '-l',
+        '--log',
+        help=f'Log output level. Default is {DEFAULT_LOG}.',
+        default=DEFAULT_LOG,
+    )
     parser.add_argument(
         '-s',
         '--samples-per-test',
@@ -605,13 +606,12 @@ def main():
         args.shard_count, args.shard_index = angle_test_util.PopGtestShardsAndIndex(env)
 
     if args.auto_dir:
-        test_suite_dir = _find_test_suite_directory(args.test_suite)
-        if not test_suite_dir:
-            logging.fatal('Could not find test suite: %s' % args.test_suite)
-            return EXIT_FAILURE
-        else:
+        if test_suite_dir := _find_test_suite_directory(args.test_suite):
             os.chdir(test_suite_dir)
 
+        else:
+            logging.fatal(f'Could not find test suite: {args.test_suite}')
+            return EXIT_FAILURE
     angle_test_util.Initialize(args.test_suite)
 
     # Get test list
@@ -665,9 +665,7 @@ def main():
     end_time = time.time()
     logging.info('Elapsed time: %.2lf seconds.' % (end_time - start_time))
 
-    if results.has_failures():
-        return EXIT_FAILURE
-    return EXIT_SUCCESS
+    return EXIT_FAILURE if results.has_failures() else EXIT_SUCCESS
 
 
 if __name__ == '__main__':

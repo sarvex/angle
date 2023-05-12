@@ -100,9 +100,9 @@ ANGLE_CHROMIUM_DEPS = [
 
 ANGLE_URL = 'https://chromium.googlesource.com/angle/angle'
 CHROMIUM_SRC_URL = 'https://chromium.googlesource.com/chromium/src'
-CHROMIUM_COMMIT_TEMPLATE = CHROMIUM_SRC_URL + '/+/%s'
-CHROMIUM_LOG_TEMPLATE = CHROMIUM_SRC_URL + '/+log/%s'
-CHROMIUM_FILE_TEMPLATE = CHROMIUM_SRC_URL + '/+/%s/%s'
+CHROMIUM_COMMIT_TEMPLATE = f'{CHROMIUM_SRC_URL}/+/%s'
+CHROMIUM_LOG_TEMPLATE = f'{CHROMIUM_SRC_URL}/+log/%s'
+CHROMIUM_FILE_TEMPLATE = f'{CHROMIUM_SRC_URL}/+/%s/%s'
 
 COMMIT_POSITION_RE = re.compile('^Cr-Commit-Position: .*#([0-9]+).*$')
 CLANG_REVISION_RE = re.compile(r'^CLANG_REVISION = \'([-0-9a-z]+)\'')
@@ -121,7 +121,7 @@ ANDROID_DEPS_PATH = 'src/third_party/android_deps/'
 NOTIFY_EMAIL = 'angle-wrangler@grotations.appspotmail.com'
 
 CLANG_TOOLS_URL = 'https://chromium.googlesource.com/chromium/src/tools/clang'
-CLANG_FILE_TEMPLATE = CLANG_TOOLS_URL + '/+/%s/%s'
+CLANG_FILE_TEMPLATE = f'{CLANG_TOOLS_URL}/+/%s/%s'
 
 CLANG_TOOLS_PATH = 'tools/clang'
 CLANG_UPDATE_SCRIPT_URL_PATH = 'scripts/update.py'
@@ -176,8 +176,7 @@ def ParseLocalDepsFile(filename):
 
 def ParseCommitPosition(commit_message):
     for line in reversed(commit_message.splitlines()):
-        m = COMMIT_POSITION_RE.match(line.strip())
-        if m:
+        if m := COMMIT_POSITION_RE.match(line.strip()):
             return int(m.group(1))
     logging.error('Failed to parse commit position id from:\n%s\n', commit_message)
     sys.exit(-1)
@@ -198,7 +197,7 @@ def _RunCommand(command, working_dir=None, ignore_exit_code=False, extra_env=Non
     if extra_env:
         assert all(isinstance(value, str) for value in extra_env.values())
         logging.debug('extra env: %s', extra_env)
-        env.update(extra_env)
+        env |= extra_env
     p = subprocess.Popen(
         command,
         stdin=subprocess.PIPE,
@@ -232,18 +231,16 @@ def _GetBranches():
             # The assumption is that the first char will always be the '*'.
             active = line[1:].strip()
             branches.append(active)
-        else:
-            branch = line.strip()
-            if branch:
-                branches.append(branch)
+        elif branch := line.strip():
+            branches.append(branch)
     return active, branches
 
 
 def _ReadGitilesContent(url):
     # Download and decode BASE64 content until
     # https://code.google.com/p/gitiles/issues/detail?id=7 is fixed.
-    logging.debug('Reading gitiles URL %s' % url)
-    base64_content = ReadUrlContent(url + '?format=TEXT')
+    logging.debug(f'Reading gitiles URL {url}')
+    base64_content = ReadUrlContent(f'{url}?format=TEXT')
     return base64.b64decode(base64_content[0]).decode('utf-8')
 
 
@@ -373,7 +370,7 @@ def CalculateChangedDeps(angle_deps, new_cr_deps):
             continue
 
         # All ANGLE Chromium dependencies are located in src/.
-        chrome_path = 'src/%s' % path
+        chrome_path = f'src/{path}'
         cr_deps_entry = new_cr_entries.get(chrome_path)
 
         if cr_deps_entry:
@@ -387,9 +384,9 @@ def CalculateChangedDeps(angle_deps, new_cr_deps):
 
             # Use the revision from Chromium's DEPS file.
             new_rev = cr_deps_entry.revision
-            assert ChromeURL(angle_deps_entry) == cr_deps_entry.url, (
-                'ANGLE DEPS entry %s has a different URL (%s) than Chromium (%s).' %
-                (path, ChromeURL(angle_deps_entry), cr_deps_entry.url))
+            assert (
+                ChromeURL(angle_deps_entry) == cr_deps_entry.url
+            ), f'ANGLE DEPS entry {path} has a different URL ({ChromeURL(angle_deps_entry)}) than Chromium ({cr_deps_entry.url}).'
         else:
             if isinstance(angle_deps_entry, DepsEntry):
                 # Use the HEAD of the deps repo.
@@ -425,12 +422,12 @@ def CalculateChangedClang(changed_deps, autoroll):
     old_clang_update_py = ReadRemoteClangFile(CLANG_UPDATE_SCRIPT_URL_PATH,
                                               mirror_change.current_rev).splitlines()
     old_clang_rev = GetClangRev(old_clang_update_py)
-    logging.debug('Found old clang rev: %s' % old_clang_rev)
+    logging.debug(f'Found old clang rev: {old_clang_rev}')
 
     new_clang_update_py = ReadRemoteClangFile(CLANG_UPDATE_SCRIPT_URL_PATH,
                                               mirror_change.new_rev).splitlines()
     new_clang_rev = GetClangRev(new_clang_update_py)
-    logging.debug('Found new clang rev: %s' % new_clang_rev)
+    logging.debug(f'Found new clang rev: {new_clang_rev}')
     clang_change = ChangedDep(CLANG_UPDATE_SCRIPT_LOCAL_PATH, None, old_clang_rev, new_clang_rev)
     return ClangChange(mirror_change, clang_change)
 
@@ -443,23 +440,26 @@ def GenerateCommitMessage(
         autoroll,
         clang_change,
 ):
-    current_cr_rev = rev_update.current_chromium_rev[0:10]
-    new_cr_rev = rev_update.new_chromium_rev[0:10]
-    rev_interval = '%s..%s' % (current_cr_rev, new_cr_rev)
-    git_number_interval = '%s:%s' % (current_commit_pos, new_commit_pos)
+    current_cr_rev = rev_update.current_chromium_rev[:10]
+    new_cr_rev = rev_update.new_chromium_rev[:10]
+    rev_interval = f'{current_cr_rev}..{new_cr_rev}'
+    git_number_interval = f'{current_commit_pos}:{new_commit_pos}'
 
     commit_msg = []
     # Autoroll already adds chromium_revision changes to commit message
     if not autoroll:
-        commit_msg.extend([
-            'Roll chromium_revision %s (%s)\n' % (rev_interval, git_number_interval),
-            'Change log: %s' % (CHROMIUM_LOG_TEMPLATE % rev_interval),
-            'Full diff: %s\n' % (CHROMIUM_COMMIT_TEMPLATE % rev_interval)
-        ])
+        commit_msg.extend(
+            [
+                'Roll chromium_revision %s (%s)\n'
+                % (rev_interval, git_number_interval),
+                f'Change log: {CHROMIUM_LOG_TEMPLATE % rev_interval}',
+                'Full diff: %s\n' % (CHROMIUM_COMMIT_TEMPLATE % rev_interval),
+            ]
+        )
 
     def Section(adjective, deps):
         noun = 'dependency' if len(deps) == 1 else 'dependencies'
-        commit_msg.append('%s %s' % (adjective, noun))
+        commit_msg.append(f'{adjective} {noun}')
 
     tbr_authors = ''
     if changed_deps_list:
@@ -467,10 +467,11 @@ def GenerateCommitMessage(
 
         for c in changed_deps_list:
             if isinstance(c, ChangedCipdPackage):
-                commit_msg.append('* %s: %s..%s' % (c.path, c.current_version, c.new_version))
+                commit_msg.append(f'* {c.path}: {c.current_version}..{c.new_version}')
             else:
-                commit_msg.append('* %s: %s/+log/%s..%s' %
-                                  (c.path, c.url, c.current_rev[0:10], c.new_rev[0:10]))
+                commit_msg.append(
+                    f'* {c.path}: {c.url}/+log/{c.current_rev[:10]}..{c.new_rev[:10]}'
+                )
 
     if changed_deps_list:
         # rev_interval is empty for autoroll, since we are starting from a state
@@ -483,11 +484,13 @@ def GenerateCommitMessage(
 
     c = clang_change
     if (c and (c.clang_change.current_rev != c.clang_change.new_rev)):
-        commit_msg.append('Clang version changed %s:%s' %
-                          (c.clang_change.current_rev, c.clang_change.new_rev))
+        commit_msg.append(
+            f'Clang version changed {c.clang_change.current_rev}:{c.clang_change.new_rev}'
+        )
 
-        rev_clang = rev_interval = '%s..%s' % (c.mirror_change.current_rev,
-                                               c.mirror_change.new_rev)
+        rev_clang = (
+            rev_interval
+        ) = f'{c.mirror_change.current_rev}..{c.mirror_change.new_rev}'
         change_url = CLANG_FILE_TEMPLATE % (rev_clang, CLANG_UPDATE_SCRIPT_URL_PATH)
         commit_msg.append('Details: %s\n' % change_url)
     else:
@@ -498,9 +501,9 @@ def GenerateCommitMessage(
         # TBR needs to be non-empty for Gerrit to process it.
         git_author = _RunCommand(['git', 'config', 'user.email'],
                                  working_dir=CHECKOUT_SRC_DIR)[0].splitlines()[0]
-        tbr_authors = git_author + ',' + tbr_authors
+        tbr_authors = f'{git_author},{tbr_authors}'
 
-        commit_msg.append('TBR=%s' % tbr_authors)
+        commit_msg.append(f'TBR={tbr_authors}')
         commit_msg.append('BUG=None')
 
     return '\n'.join(commit_msg)
@@ -520,7 +523,7 @@ def UpdateDepsFile(deps_filename, rev_update, changed_deps, new_cr_content, auto
         # Add and remove dependencies. For now: only generated android deps.
         # Since gclient cannot add or remove deps, we rely on the fact that
         # these android deps are located in one place to copy/paste.
-        deps_re = re.compile(ANDROID_DEPS_START + '.*' + ANDROID_DEPS_END, re.DOTALL)
+        deps_re = re.compile(f'{ANDROID_DEPS_START}.*{ANDROID_DEPS_END}', re.DOTALL)
         new_deps = deps_re.search(new_cr_content)
         old_deps = deps_re.search(deps_content)
         if not new_deps or not old_deps:
@@ -528,8 +531,9 @@ def UpdateDepsFile(deps_filename, rev_update, changed_deps, new_cr_content, auto
             raise RollError('Was expecting to find "%s" and "%s"\n'
                             'in %s DEPS' % (ANDROID_DEPS_START, ANDROID_DEPS_END, faulty))
 
-        replacement = new_deps.group(0).replace('src/third_party/android_deps',
-                                                'third_party/android_deps')
+        replacement = new_deps[0].replace(
+            'src/third_party/android_deps', 'third_party/android_deps'
+        )
         replacement = replacement.replace('checkout_android',
                                           'checkout_android and not build_with_chromium')
 
@@ -552,9 +556,9 @@ def UpdateDepsFile(deps_filename, rev_update, changed_deps, new_cr_content, auto
                                 'Then run "gclient sync" again.' % local_dep_dir)
         if isinstance(dep, ChangedCipdPackage):
             package = dep.package.format()  # Eliminate double curly brackets
-            update = '%s:%s@%s' % (dep.path, package, dep.new_version)
+            update = f'{dep.path}:{package}@{dep.new_version}'
         else:
-            update = '%s@%s' % (dep.path, dep.new_rev)
+            update = f'{dep.path}@{dep.new_rev}'
         gclient_cmd = 'gclient'
         if platform.system() == 'Windows':
             gclient_cmd += '.bat'
@@ -624,9 +628,7 @@ def _LocalCommitAmend(commit_msg, dry_run):
 def ChooseCQMode(skip_cq, cq_over, current_commit_pos, new_commit_pos):
     if skip_cq:
         return 0
-    if (new_commit_pos - current_commit_pos) < cq_over:
-        return 1
-    return 2
+    return 1 if (new_commit_pos - current_commit_pos) < cq_over else 2
 
 
 def _UploadCL(commit_queue_mode):
@@ -637,8 +639,16 @@ def _UploadCL(commit_queue_mode):
     - 1: Run trybots but do not submit to CQ.
     - 0: Skip CQ, upload only.
   """
-    cmd = ['git', 'cl', 'upload', '--force', '--bypass-hooks', '--send-mail']
-    cmd.extend(['--cc', NOTIFY_EMAIL])
+    cmd = [
+        'git',
+        'cl',
+        'upload',
+        '--force',
+        '--bypass-hooks',
+        '--send-mail',
+        '--cc',
+        NOTIFY_EMAIL,
+    ]
     if commit_queue_mode >= 2:
         logging.info('Sending the CL to the CQ...')
         cmd.extend(['--use-commit-queue'])
@@ -762,16 +772,15 @@ def main():
 
     if opts.autoroll:
         _LocalCommitAmend(commit_msg, opts.dry_run)
+    elif _IsTreeClean():
+        logging.info("No DEPS changes detected, skipping CL creation.")
     else:
-        if _IsTreeClean():
-            logging.info("No DEPS changes detected, skipping CL creation.")
-        else:
-            _LocalCommit(commit_msg, opts.dry_run)
-            commit_queue_mode = ChooseCQMode(opts.skip_cq, opts.cq_over, current_commit_pos,
-                                             new_commit_pos)
-            logging.info('Uploading CL...')
-            if not opts.dry_run:
-                _UploadCL(commit_queue_mode)
+        _LocalCommit(commit_msg, opts.dry_run)
+        commit_queue_mode = ChooseCQMode(opts.skip_cq, opts.cq_over, current_commit_pos,
+                                         new_commit_pos)
+        logging.info('Uploading CL...')
+        if not opts.dry_run:
+            _UploadCL(commit_queue_mode)
     return 0
 
 

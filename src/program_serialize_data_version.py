@@ -44,7 +44,6 @@ response_file_name = args.response_file_name
 with open(response_file_name, "r") as input_files_for_hash_generation:
     angle_code_files = shlex.split(input_files_for_hash_generation)
 digest, digest_size = GenerateHashOfAffectedFiles(angle_code_files)
-hfile = open(output_file, 'w')
-hfile.write('#define ANGLE_PROGRAM_VERSION "%s"\n' % digest)
-hfile.write('#define ANGLE_PROGRAM_VERSION_HASH_SIZE %d\n' % digest_size)
-hfile.close()
+with open(output_file, 'w') as hfile:
+    hfile.write('#define ANGLE_PROGRAM_VERSION "%s"\n' % digest)
+    hfile.write('#define ANGLE_PROGRAM_VERSION_HASH_SIZE %d\n' % digest_size)

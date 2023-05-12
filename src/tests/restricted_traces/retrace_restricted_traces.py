@@ -69,7 +69,7 @@ def get_script_dir():
 
 def context_header(trace, trace_path):
     context_id = get_context(trace)
-    header = '%s_context%s.h' % (trace, context_id)
+    header = f'{trace}_context{context_id}.h'
     return os.path.join(trace_path, header)
 
 
@@ -101,10 +101,7 @@ def save_trace_json(trace, data):
 def path_contains_header(path):
     if not os.path.isdir(path):
         return False
-    for file in os.listdir(path):
-        if fnmatch.fnmatch(file, '*.h'):
-            return True
-    return False
+    return any(fnmatch.fnmatch(file, '*.h') for file in os.listdir(path))
 
 
 def chmod_directory(directory, perm):
@@ -121,7 +118,7 @@ def ensure_rmdir(directory):
 
 
 def copy_trace_folder(old_path, new_path):
-    logging.info('%s -> %s' % (old_path, new_path))
+    logging.info(f'{old_path} -> {new_path}')
     ensure_rmdir(new_path)
     shutil.copytree(old_path, new_path)
 
@@ -146,7 +143,7 @@ def restore_single_trace(trace, backup_path):
     trace_path = src_trace_path(trace)
     trace_backup_path = os.path.join(backup_path, trace)
     if not os.path.isdir(trace_backup_path):
-        logging.error('Trace folder not found at %s' % trace_backup_path)
+        logging.error(f'Trace folder not found at {trace_backup_path}')
         return False
     else:
         copy_trace_folder(trace_backup_path, trace_path)
@@ -165,7 +162,7 @@ def run_autoninja(args):
         autoninja_binary += '.bat'
 
     autoninja_args = [autoninja_binary, '-C', args.gn_path, args.test_suite]
-    logging.debug('Calling %s' % ' '.join(autoninja_args))
+    logging.debug(f"Calling {' '.join(autoninja_args)}")
     if args.show_test_stdout:
         subprocess.run(autoninja_args, check=True)
     else:
@@ -175,7 +172,7 @@ def run_autoninja(args):
 def run_test_suite(args, trace_binary, trace, max_steps, additional_args, additional_env):
     run_args = [
         angle_test_util.ExecutablePathInCurrentDir(trace_binary),
-        '--gtest_filter=TraceTest.%s' % trace,
+        f'--gtest_filter=TraceTest.{trace}',
         '--max-steps-performed',
         str(max_steps),
     ] + additional_args
@@ -187,25 +184,25 @@ def run_test_suite(args, trace_binary, trace, max_steps, additional_args, additi
     if env_string:
         env_string += ' '
 
-    logging.info('%s%s' % (env_string, ' '.join(run_args)))
+    logging.info(f"{env_string}{' '.join(run_args)}")
     p = subprocess.run(run_args, env=env, capture_output=True, check=True)
     if args.show_test_stdout:
         logging.info('Test stdout:\n%s' % p.stdout.decode())
 
 
 def upgrade_single_trace(args, trace_binary, trace, out_path, no_overwrite, c_sources):
-    logging.debug('Tracing %s' % trace)
+    logging.debug(f'Tracing {trace}')
 
     trace_path = os.path.abspath(os.path.join(out_path, trace))
     if no_overwrite and path_contains_header(trace_path):
-        logging.info('Skipping "%s" because the out folder already exists' % trace)
+        logging.info(f'Skipping "{trace}" because the out folder already exists')
         return
 
     json_data = load_trace_json(trace)
     num_frames = get_num_frames(json_data)
 
     metadata = json_data['TraceMetadata']
-    logging.debug('Read metadata: %s' % str(metadata))
+    logging.debug(f'Read metadata: {str(metadata)}')
 
     max_steps = min(args.limit, num_frames) if args.limit else num_frames
 
@@ -241,7 +238,7 @@ def upgrade_single_trace(args, trace_binary, trace, out_path, no_overwrite, c_so
 
         run_test_suite(args, trace_binary, trace, max_steps, additional_args, additional_env)
 
-        json_file = "{}/{}.json".format(trace_path, trace)
+        json_file = f"{trace_path}/{trace}.json"
         if not os.path.exists(json_file):
             logging.error(
                 f'There was a problem tracing "{trace}", could not find json file: {json_file}')
@@ -257,16 +254,20 @@ def upgrade_traces(args, traces):
     run_autoninja(args)
     trace_binary = os.path.join(args.gn_path, args.test_suite)
 
-    failures = []
-
-    for trace in angle_test_util.FilterTests(traces, args.traces):
-        if not upgrade_single_trace(args, trace_binary, trace, args.out_path, args.no_overwrite,
-                                    args.c_sources):
-            failures += [trace]
-
-    if failures:
+    if failures := [
+        trace
+        for trace in angle_test_util.FilterTests(traces, args.traces)
+        if not upgrade_single_trace(
+            args,
+            trace_binary,
+            trace,
+            args.out_path,
+            args.no_overwrite,
+            args.c_sources,
+        )
+    ]:
         print('The following traces failed to upgrade:\n')
-        print('\n'.join(['  ' + trace for trace in failures]))
+        print('\n'.join([f'  {trace}' for trace in failures]))
         return EXIT_FAILURE
 
     return EXIT_SUCCESS
@@ -293,16 +294,17 @@ def validate_traces(args, traces):
         'ANGLE_FEATURE_OVERRIDES_ENABLED': 'allocateNonZeroMemory:forceInitShaderVariables'
     }
 
-    failures = []
     trace_binary = os.path.join(args.gn_path, args.test_suite)
 
-    for trace in angle_test_util.FilterTests(traces, args.traces):
-        if not validate_single_trace(args, trace_binary, trace, additional_args, additional_env):
-            failures += [trace]
-
-    if failures:
+    if failures := [
+        trace
+        for trace in angle_test_util.FilterTests(traces, args.traces)
+        if not validate_single_trace(
+            args, trace_binary, trace, additional_args, additional_env
+        )
+    ]:
         print('The following traces failed to validate:\n')
-        print('\n'.join(['  ' + trace for trace in failures]))
+        print('\n'.join([f'  {trace}' for trace in failures]))
         return EXIT_FAILURE
 
     return EXIT_SUCCESS
@@ -336,15 +338,16 @@ def interpret_traces(args, traces):
             result = FAIL
             try:
                 with tempfile.TemporaryDirectory() as out_path:
-                    logging.debug('Using temporary path %s.' % out_path)
-                    if upgrade_single_trace(args, trace_binary, trace, out_path, False, True):
-                        if restore_single_trace(trace, out_path):
-                            validate_args = ['--trace-interpreter=c']
-                            if args.verbose:
-                                validate_args += ['--verbose-logging']
-                            if validate_single_trace(args, trace_binary, trace, validate_args, {}):
-                                logging.info('%s passed!' % trace)
-                                result = PASS
+                    logging.debug(f'Using temporary path {out_path}.')
+                    if upgrade_single_trace(
+                        args, trace_binary, trace, out_path, False, True
+                    ) and restore_single_trace(trace, out_path):
+                        validate_args = ['--trace-interpreter=c']
+                        if args.verbose:
+                            validate_args += ['--verbose-logging']
+                        if validate_single_trace(args, trace_binary, trace, validate_args, {}):
+                            logging.info(f'{trace} passed!')
+                            result = PASS
             finally:
                 restore_single_trace(trace, backup_path)
             results['num_failures_by_type'][result] += 1
@@ -465,7 +468,7 @@ def get_min_reqs(args, traces):
                 restore_trace()
                 continue
 
-            if len(extensions) > 0 and not run_test_suite_with_exts(extensions):
+            if extensions and not run_test_suite_with_exts(extensions):
                 skipped_traces.append((trace, "Requesting all extensions results in test failure"))
                 restore_trace()
                 continue
@@ -531,8 +534,9 @@ def main():
     parser.add_argument('-l', '--log', help='Logging level.', default=DEFAULT_LOG_LEVEL)
     parser.add_argument(
         '--test-suite',
-        help='Test Suite. Default is %s' % DEFAULT_TEST_SUITE,
-        default=DEFAULT_TEST_SUITE)
+        help=f'Test Suite. Default is {DEFAULT_TEST_SUITE}',
+        default=DEFAULT_TEST_SUITE,
+    )
     parser.add_argument(
         '--no-swiftshader',
         help='Trace against native Vulkan.',
@@ -551,8 +555,9 @@ def main():
         '-o',
         '--out-path',
         '--backup-path',
-        help='Destination folder. Default is "%s".' % DEFAULT_BACKUP_FOLDER,
-        default=DEFAULT_BACKUP_FOLDER)
+        help=f'Destination folder. Default is "{DEFAULT_BACKUP_FOLDER}".',
+        default=DEFAULT_BACKUP_FOLDER,
+    )
 
     restore_parser = subparsers.add_parser(
         'restore', help='Copies traces from a saved folder to the trace folder.')
@@ -560,8 +565,9 @@ def main():
         '-o',
         '--out-path',
         '--backup-path',
-        help='Path the traces were saved. Default is "%s".' % DEFAULT_BACKUP_FOLDER,
-        default=DEFAULT_BACKUP_FOLDER)
+        help=f'Path the traces were saved. Default is "{DEFAULT_BACKUP_FOLDER}".',
+        default=DEFAULT_BACKUP_FOLDER,
+    )
     restore_parser.add_argument(
         'traces', help='Traces to restore. Supports fnmatch expressions.', default='*')
 
@@ -644,14 +650,15 @@ def main():
         elif args.command == 'get_min_reqs':
             return get_min_reqs(args, traces)
         else:
-            logging.fatal('Unknown command: %s' % args.command)
+            logging.fatal(f'Unknown command: {args.command}')
             return EXIT_FAILURE
     except subprocess.CalledProcessError as e:
         if args.show_test_stdout:
-            logging.exception('There was an exception running "%s"' % traces)
+            logging.exception(f'There was an exception running "{traces}"')
         else:
-            logging.exception('There was an exception running "%s": %s' %
-                              (traces, e.output.decode()))
+            logging.exception(
+                f'There was an exception running "{traces}": {e.output.decode()}'
+            )
 
         return EXIT_FAILURE
 

@@ -64,10 +64,10 @@ def RunAndroidTestSuite(args, extra_args):
         return 0
 
     if args.suite == 'angle_trace_tests':
-        traces = set(android_helper.GetTraceFromTestName(test) for test in tests)
+        traces = {android_helper.GetTraceFromTestName(test) for test in tests}
         android_helper.PrepareRestrictedTraces(traces)
 
-    flags = ['--gtest_filter=' + args.filter] if args.filter else []
+    flags = [f'--gtest_filter={args.filter}'] if args.filter else []
     return android_helper.RunTests(args.suite, flags + extra_args)[0]
 
 

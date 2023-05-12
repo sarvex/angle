@@ -69,7 +69,9 @@ if is_windows:
     # Is a folder a chrome binary directory?
     def is_chrome_bin(str):
         chrome_file = os.path.join(chrome_folder, str)
-        return os.path.isdir(chrome_file) and all([char.isdigit() or char == '.' for char in str])
+        return os.path.isdir(chrome_file) and all(
+            char.isdigit() or char == '.' for char in str
+        )
 
     sorted_chrome_bins = sorted(
         [folder for folder in os.listdir(chrome_folder) if is_chrome_bin(folder)], reverse=True)
@@ -78,11 +80,11 @@ if is_windows:
 else:
     dest_folder = chrome_folder
 
-print('Copying binaries from ' + source_folder + ' to ' + dest_folder + '.')
+print(f'Copying binaries from {source_folder} to {dest_folder}.')
 
 
 def copy_file(src, dst):
-    print(' - ' + src + '   -->   ' + dst)
+    print(f' - {src}   -->   {dst}')
     if is_macos and os.path.isfile(dst):
         # For the codesign to work, the original file must be removed
         os.remove(dst)
@@ -98,10 +100,10 @@ def do_copy(filename, is_optional):
         copy_file(src, dst)
 
         if is_windows:
-            copy_file(src + '.pdb', dst + '.pdb')
+            copy_file(f'{src}.pdb', f'{dst}.pdb')
 
     elif not is_optional:
-        print(' - COULD NOT FIND "' + src + '"')
+        print(f' - COULD NOT FIND "{src}"')
 
 
 for filename in libs_to_copy:

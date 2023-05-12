@@ -32,10 +32,7 @@ def get_executable_name(script):
     with open(script, 'r') as f:
         binary = os.path.basename(f.readline().strip().replace(' ', '/'))
         if platform.system() == 'Windows':
-            if binary == 'python2':
-                return 'python.bat'
-            else:
-                return binary + '.bat'
+            return 'python.bat' if binary == 'python2' else f'{binary}.bat'
         else:
             return binary
 
@@ -47,7 +44,7 @@ def grab_from_script(script, param):
         res = subprocess.check_output([exe, os.path.basename(script), param],
                                       cwd=script_dir).decode().strip()
     except Exception:
-        print('Error grabbing script output: %s, executable %s' % (script, exe))
+        print(f'Error grabbing script output: {script}, executable {exe}')
         raise
     if res == '':
         return []
@@ -59,11 +56,10 @@ def grab_from_script(script, param):
 
 # auto_script is a standard way for scripts to return their inputs and outputs.
 def auto_script(script):
-    info = {
+    return {
         'inputs': grab_from_script(script, 'inputs'),
-        'outputs': grab_from_script(script, 'outputs')
+        'outputs': grab_from_script(script, 'outputs'),
     }
-    return info
 
 
 generators = {
@@ -153,12 +149,15 @@ def any_hash_dirty(name, filenames, new_hashes, old_hashes):
 
     for fname in filenames:
         if not os.path.isfile(os.path.join(root_dir, fname)):
-            print('File not found: "%s". Code gen dirty for %s' % (fname, name))
+            print(f'File not found: "{fname}". Code gen dirty for {name}')
             found_dirty_hash = True
         else:
             new_hashes[fname] = md5(fname)
-            if (not fname in old_hashes) or (old_hashes[fname] != new_hashes[fname]):
-                print('Hash for "%s" dirty for %s generator.' % (fname, name))
+            if (
+                fname not in old_hashes
+                or old_hashes[fname] != new_hashes[fname]
+            ):
+                print(f'Hash for "{fname}" dirty for {name} generator.')
                 found_dirty_hash = True
     return found_dirty_hash
 
@@ -167,12 +166,12 @@ def any_old_hash_missing(all_new_hashes, all_old_hashes):
     result = False
     for file, old_hashes in all_old_hashes.items():
         if file not in all_new_hashes:
-            print('"%s" does not exist. Code gen dirty.' % file)
+            print(f'"{file}" does not exist. Code gen dirty.')
             result = True
         else:
             for name, _ in old_hashes.items():
                 if name not in all_new_hashes[file]:
-                    print('Hash for %s is missing from "%s". Code gen is dirty.' % (name, file))
+                    print(f'Hash for {name} is missing from "{file}". Code gen is dirty.')
                     result = True
     return result
 
@@ -180,7 +179,7 @@ def any_old_hash_missing(all_new_hashes, all_old_hashes):
 def update_output_hashes(script, outputs, new_hashes):
     for output in outputs:
         if not os.path.isfile(output):
-            print('Output is missing from %s: %s' % (script, output))
+            print(f'Output is missing from {script}: {output}')
             sys.exit(1)
         new_hashes[output] = md5(output)
 
@@ -193,7 +192,7 @@ def load_hashes():
             try:
                 hashes[file] = json.load(hash_file)
             except ValueError:
-                raise Exception("Could not decode JSON from %s" % file)
+                raise Exception(f"Could not decode JSON from {file}")
     return hashes
 
 
@@ -241,7 +240,7 @@ def main():
             any_dirty = True
 
             if not args.verify_only:
-                print('Running ' + name + ' code generator')
+                print(f'Running {name} code generator')
 
                 exe = get_executable_name(script)
                 subprocess.check_call([exe, os.path.basename(script)],

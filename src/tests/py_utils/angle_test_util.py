@@ -63,10 +63,7 @@ def IsWindows():
 
 
 def ExecutablePathInCurrentDir(binary):
-    if IsWindows():
-        return '.\\%s.exe' % binary
-    else:
-        return './%s' % binary
+    return '.\\%s.exe' % binary if IsWindows() else f'./{binary}'
 
 
 def HasGtestShardsAndIndex(env):
@@ -167,12 +164,15 @@ def RunTestSuite(test_suite,
     with contextlib.ExitStack() as stack:
         stdout_path = stack.enter_context(common.temporary_file())
 
-        flag_matches = [a for a in cmd_args if a.startswith('--isolated-script-test-output=')]
-        if flag_matches:
+        if flag_matches := [
+            a
+            for a in cmd_args
+            if a.startswith('--isolated-script-test-output=')
+        ]:
             results_path = flag_matches[0].split('=')[1]
         else:
             results_path = stack.enter_context(common.temporary_file())
-            runner_cmd += ['--isolated-script-test-output=%s' % results_path]
+            runner_cmd += [f'--isolated-script-test-output={results_path}']
 
         if use_xvfb:
             xvfb_whd = '3120x3120x24'  # Max screen dimensions from traces, as per:

@@ -37,7 +37,7 @@ class _Global(object):
 
 
 def _ApkPath(suite_name):
-    return os.path.join('%s_apk' % suite_name, '%s-debug.apk' % suite_name)
+    return os.path.join(f'{suite_name}_apk', f'{suite_name}-debug.apk')
 
 
 @functools.lru_cache()
@@ -63,14 +63,14 @@ def _FindPackageName(apk_path):
         _RemovePrefix(item, 'name=').strip('\'')
         for item in badging.split()
         if item.startswith('name='))
-    logging.debug('Package name: %s' % package_name)
+    logging.debug(f'Package name: {package_name}')
     return package_name
 
 
 def _InitializeAndroid(apk_path):
     if _GetAdbRoot():
         # /data/local/tmp/ is not writable by apps.. So use the app path
-        _Global.temp_dir = '/data/data/' + TEST_PACKAGE_NAME + '/tmp/'
+        _Global.temp_dir = f'/data/data/{TEST_PACKAGE_NAME}/tmp/'
     else:
         # /sdcard/ is slow (see https://crrev.com/c/3615081 for details)
         # logging will be fully-buffered, can be truncated on crashes
@@ -86,7 +86,7 @@ def _InitializeAndroid(apk_path):
         assert 'libangle_util.so' in apk_so_libs
         _Global.lib_extension = '.so'
     # When traces are outside of the apk this lib is also outside
-    interpreter_so_lib = 'libangle_trace_interpreter' + _Global.lib_extension
+    interpreter_so_lib = f'libangle_trace_interpreter{_Global.lib_extension}'
     _Global.traces_outside_of_apk = interpreter_so_lib not in apk_so_libs
 
     if logging.getLogger().isEnabledFor(logging.DEBUG):
@@ -127,8 +127,7 @@ def _Run(cmd):
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
-    output = subprocess.check_output(cmd, startupinfo=startupinfo)
-    return output
+    return subprocess.check_output(cmd, startupinfo=startupinfo)
 
 
 @functools.lru_cache()
@@ -181,7 +180,7 @@ def _ReadDeviceFile(device_path):
 
 
 def _RemoveDeviceFile(device_path):
-    _AdbShell('rm -f ' + device_path + ' || true')  # ignore errors
+    _AdbShell(f'rm -f {device_path} || true')
 
 
 def _AddRestrictedTracesJson():
@@ -200,18 +199,21 @@ def _AddRestrictedTracesJson():
 
 
 def _GetDeviceApkPath():
-    pm_path = _AdbShell('pm path %s || true' % TEST_PACKAGE_NAME).decode().strip()
+    pm_path = _AdbShell(f'pm path {TEST_PACKAGE_NAME} || true').decode().strip()
     if not pm_path:
-        logging.debug('No installed path found for %s' % TEST_PACKAGE_NAME)
+        logging.debug(f'No installed path found for {TEST_PACKAGE_NAME}')
         return None
     device_apk_path = _RemovePrefix(pm_path, 'package:')
-    logging.debug('Device APK path is %s' % device_apk_path)
+    logging.debug(f'Device APK path is {device_apk_path}')
     return device_apk_path
 
 
 def _CompareHashes(local_path, device_path):
-    device_hash = _AdbShell('sha256sum -b ' + device_path +
-                            ' 2> /dev/null || true').decode().strip()
+    device_hash = (
+        _AdbShell(f'sha256sum -b {device_path} 2> /dev/null || true')
+        .decode()
+        .strip()
+    )
     if not device_hash:
         logging.debug('_CompareHashes: File not found on device')
         return False  # file not on device
@@ -222,7 +224,7 @@ def _CompareHashes(local_path, device_path):
             for data in iter(lambda: f.read(65536), b''):
                 h.update(data)
     except Exception as e:
-        logging.error('An error occurred in _CompareHashes: %s' % e)
+        logging.error(f'An error occurred in _CompareHashes: {e}')
 
     return h.hexdigest() == device_hash
 
@@ -234,7 +236,9 @@ def _PrepareTestSuite(suite_name):
     if device_apk_path and _CompareHashes(apk_path, device_apk_path):
         logging.info('Skipping APK install because host and device hashes match')
     else:
-        logging.info('Installing apk path=%s size=%s' % (apk_path, os.path.getsize(apk_path)))
+        logging.info(
+            f'Installing apk path={apk_path} size={os.path.getsize(apk_path)}'
+        )
         _AdbRun(['install', '-r', '-d', apk_path])
 
     permissions = [
@@ -246,10 +250,12 @@ def _PrepareTestSuite(suite_name):
               'for q in %s;do pm grant "$p" "$q";done;' %
               (TEST_PACKAGE_NAME, ' '.join(permissions)))
 
-    _AdbShell('appops set %s MANAGE_EXTERNAL_STORAGE allow || true' % TEST_PACKAGE_NAME)
+    _AdbShell(
+        f'appops set {TEST_PACKAGE_NAME} MANAGE_EXTERNAL_STORAGE allow || true'
+    )
 
     _AdbShell('mkdir -p /sdcard/chromium_tests_root/')
-    _AdbShell('mkdir -p %s' % _Global.temp_dir)
+    _AdbShell(f'mkdir -p {_Global.temp_dir}')
 
     if suite_name == ANGLE_TRACE_TEST_SUITE:
         _AddRestrictedTracesJson()
@@ -282,43 +288,43 @@ def PrepareRestrictedTraces(traces):
             return False
 
     def _Push(local_path, path_from_root):
-        device_path = '/sdcard/chromium_tests_root/' + path_from_root
+        device_path = f'/sdcard/chromium_tests_root/{path_from_root}'
         if not _HashesMatch(local_path, device_path):
             _AdbRun(['push', local_path, device_path])
 
     def _PushLibToAppDir(lib_name):
         local_path = lib_name
-        device_path = '/data/user/0/com.android.angle.test/angle_traces/' + lib_name
+        device_path = f'/data/user/0/com.android.angle.test/angle_traces/{lib_name}'
         if _HashesMatch(local_path, device_path):
             return
 
         tmp_path = posixpath.join(app_tmp_path, lib_name)
-        logging.debug('_PushToAppDir: Pushing %s to %s' % (local_path, tmp_path))
+        logging.debug(f'_PushToAppDir: Pushing {local_path} to {tmp_path}')
         try:
             _AdbRun(['push', local_path, tmp_path])
-            _AdbShell('run-as ' + TEST_PACKAGE_NAME + ' cp ' + tmp_path + ' ./angle_traces/')
-            _AdbShell('rm ' + tmp_path)
+            _AdbShell(f'run-as {TEST_PACKAGE_NAME} cp {tmp_path} ./angle_traces/')
+            _AdbShell(f'rm {tmp_path}')
         except Exception as e:
-            logging.error('An error occurred in _PushToAppDir: %s' % e)
+            logging.error(f'An error occurred in _PushToAppDir: {e}')
         finally:
             _RemoveDeviceFile(tmp_path)
 
     # Create the directories we need
-    _AdbShell('mkdir -p ' + app_tmp_path)
-    _AdbShell('run-as ' + TEST_PACKAGE_NAME + ' mkdir -p angle_traces')
+    _AdbShell(f'mkdir -p {app_tmp_path}')
+    _AdbShell(f'run-as {TEST_PACKAGE_NAME} mkdir -p angle_traces')
 
     # Set up each trace
     for trace in traces:
-        path_from_root = 'src/tests/restricted_traces/' + trace + '/' + trace + '.angledata.gz'
-        _Push('../../' + path_from_root, path_from_root)
+        path_from_root = f'src/tests/restricted_traces/{trace}/{trace}.angledata.gz'
+        _Push(f'../../{path_from_root}', path_from_root)
 
-        tracegz = 'gen/tracegz_' + trace + '.gz'
+        tracegz = f'gen/tracegz_{trace}.gz'
         _Push(tracegz, tracegz)
 
     if _Global.traces_outside_of_apk:
-        _PushLibToAppDir('libangle_trace_interpreter' + _Global.lib_extension)
+        _PushLibToAppDir(f'libangle_trace_interpreter{_Global.lib_extension}')
         for trace in traces:
-            lib_name = 'libangle_restricted_traces_' + trace + _Global.lib_extension
+            lib_name = f'libangle_restricted_traces_{trace}{_Global.lib_extension}'
             _PushLibToAppDir(lib_name)
 
     logging.info('Synced files for %d traces (%.1fMB, %d files already ok) in %.1fs', len(traces),
@@ -332,21 +338,21 @@ def _RandomHex():
 
 @contextlib.contextmanager
 def _TempDeviceDir():
-    path = posixpath.join(_Global.temp_dir, 'temp_dir-%s' % _RandomHex())
-    _AdbShell('mkdir -p ' + path)
+    path = posixpath.join(_Global.temp_dir, f'temp_dir-{_RandomHex()}')
+    _AdbShell(f'mkdir -p {path}')
     try:
         yield path
     finally:
-        _AdbShell('rm -rf ' + path)
+        _AdbShell(f'rm -rf {path}')
 
 
 @contextlib.contextmanager
 def _TempDeviceFile():
-    path = posixpath.join(_Global.temp_dir, 'temp_file-%s' % _RandomHex())
+    path = posixpath.join(_Global.temp_dir, f'temp_file-{_RandomHex()}')
     try:
         yield path
     finally:
-        _AdbShell('rm -f ' + path)
+        _AdbShell(f'rm -f {path}')
 
 
 @contextlib.contextmanager
@@ -361,16 +367,18 @@ def _TempLocalFile():
 
 def _RunInstrumentation(flags):
     with _TempDeviceFile() as temp_device_file:
-        cmd = ' '.join([
-            'p=%s;' % TEST_PACKAGE_NAME,
-            'ntr=org.chromium.native_test.NativeTestInstrumentationTestRunner;',
-            'am instrument -w',
-            '-e $ntr.NativeTestActivity "$p".AngleUnitTestActivity',
-            '-e $ntr.ShardNanoTimeout 2400000000000',
-            '-e org.chromium.native_test.NativeTest.CommandLineFlags "%s"' % ' '.join(flags),
-            '-e $ntr.StdoutFile ' + temp_device_file,
-            '"$p"/org.chromium.build.gtest_apk.NativeTestInstrumentationTestRunner',
-        ])
+        cmd = ' '.join(
+            [
+                f'p={TEST_PACKAGE_NAME};',
+                'ntr=org.chromium.native_test.NativeTestInstrumentationTestRunner;',
+                'am instrument -w',
+                '-e $ntr.NativeTestActivity "$p".AngleUnitTestActivity',
+                '-e $ntr.ShardNanoTimeout 2400000000000',
+                f"""-e org.chromium.native_test.NativeTest.CommandLineFlags "{' '.join(flags)}\"""",
+                f'-e $ntr.StdoutFile {temp_device_file}',
+                '"$p"/org.chromium.build.gtest_apk.NativeTestInstrumentationTestRunner',
+            ]
+        )
 
         _AdbShell(cmd)
         return _ReadDeviceFile(temp_device_file)
@@ -380,12 +388,14 @@ def _DumpDebugInfo(since_time):
     logcat_output = _AdbRun(['logcat', '-t', since_time]).decode()
     logging.info('logcat:\n%s', logcat_output)
 
-    pid_lines = [
-        ln for ln in logcat_output.split('\n')
+    if pid_lines := [
+        ln
+        for ln in logcat_output.split('\n')
         if 'org.chromium.native_test.NativeTest.StdoutFile' in ln
-    ]
-    if pid_lines:
-        debuggerd_output = _AdbShell('debuggerd %s' % pid_lines[-1].split(' ')[2]).decode()
+    ]:
+        debuggerd_output = _AdbShell(
+            f"debuggerd {pid_lines[-1].split(' ')[2]}"
+        ).decode()
         logging.warning('debuggerd output:\n%s', debuggerd_output)
 
 
@@ -405,7 +415,7 @@ def _RunInstrumentationWithTimeout(flags, timeout):
     if t.is_alive():  # join timed out
         logging.warning('Timed out, dumping debug info')
         _DumpDebugInfo(since_time=initial_time)
-        raise TimeoutError('Test run did not finish in %s seconds' % timeout)
+        raise TimeoutError(f'Test run did not finish in {timeout} seconds')
 
     return results[0]
 
@@ -414,7 +424,7 @@ def AngleSystemInfo(args):
     _EnsureTestSuite('angle_system_info_test')
 
     with _TempDeviceDir() as temp_dir:
-        _RunInstrumentation(args + ['--render-test-output-dir=' + temp_dir])
+        _RunInstrumentation(args + [f'--render-test-output-dir={temp_dir}'])
         output_file = posixpath.join(temp_dir, 'angle_system_info.json')
         return json.loads(_ReadDeviceFile(output_file))
 
@@ -424,15 +434,14 @@ def GetBuildFingerprint():
 
 
 def _PullDir(device_dir, local_dir):
-    files = _AdbShell('ls -1 %s' % device_dir).decode('ascii').split('\n')
+    files = _AdbShell(f'ls -1 {device_dir}').decode('ascii').split('\n')
     for f in files:
-        f = f.strip()
-        if f:
+        if f := f.strip():
             _AdbRun(['pull', posixpath.join(device_dir, f), posixpath.join(local_dir, f)])
 
 
 def _RemoveFlag(args, f):
-    matches = [a for a in args if a.startswith(f + '=')]
+    matches = [a for a in args if a.startswith(f'{f}=')]
     assert len(matches) <= 1
     if matches:
         original_value = matches[0].split('=')[1]
@@ -453,20 +462,26 @@ def RunSmokeTest():
 
     trace_name = GetTraceFromTestName(test_name)
     if not trace_name:
-        raise Exception('Cannot find trace name from %s.' % test_name)
+        raise Exception(f'Cannot find trace name from {test_name}.')
 
     PrepareRestrictedTraces([trace_name])
 
     with _TempDeviceFile() as device_test_output_path:
         flags = [
-            '--gtest_filter=' + test_name, '--no-warmup', '--steps-per-trial', '1', '--trials',
-            '1', '--isolated-script-test-output=' + device_test_output_path
+            f'--gtest_filter={test_name}',
+            '--no-warmup',
+            '--steps-per-trial',
+            '1',
+            '--trials',
+            '1',
+            f'--isolated-script-test-output={device_test_output_path}',
         ]
         try:
             output = _RunInstrumentationWithTimeout(flags, run_instrumentation_timeout)
         except TimeoutError:
-            raise Exception('Smoke test did not finish in %s seconds' %
-                            run_instrumentation_timeout)
+            raise Exception(
+                f'Smoke test did not finish in {run_instrumentation_timeout} seconds'
+            )
 
         test_output = _ReadDeviceFile(device_test_output_path)
 
@@ -491,15 +506,15 @@ def RunTests(test_suite, args, stdoutfile=None, log_output=True):
     try:
         with contextlib.ExitStack() as stack:
             device_test_output_path = stack.enter_context(_TempDeviceFile())
-            args.append('--isolated-script-test-output=' + device_test_output_path)
+            args.append(f'--isolated-script-test-output={device_test_output_path}')
 
             if perf_output_path:
                 device_perf_path = stack.enter_context(_TempDeviceFile())
-                args.append('--isolated-script-test-perf-output=%s' % device_perf_path)
+                args.append(f'--isolated-script-test-perf-output={device_perf_path}')
 
             if test_output_dir:
                 device_output_dir = stack.enter_context(_TempDeviceDir())
-                args.append('--render-test-output-dir=' + device_output_dir)
+                args.append(f'--render-test-output-dir={device_output_dir}')
 
             output = _RunInstrumentationWithTimeout(args, timeout=10 * 60)
 

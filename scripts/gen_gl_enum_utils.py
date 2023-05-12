@@ -139,7 +139,7 @@ empty_enum_groups = ['SemaphoreParameterName', 'ShaderBinaryFormat']
 
 
 def dump_value_to_string_mapping(enum_groups, api_enum):
-    exporting_groups = list()
+    exporting_groups = []
     for group_name, inner_mapping in enum_groups.items():
         # Convert to pairs and strip out-of-range values.
         string_value_pairs = list(
@@ -150,23 +150,19 @@ def dump_value_to_string_mapping(enum_groups, api_enum):
         # sort according values
         string_value_pairs.sort(key=lambda x: (x[1], len(x[0]), x[0]))
 
-        # remove all duplicate values from the pairs list
-        # some value may have more than one GLenum mapped to them, such as:
-        #     GL_DRAW_FRAMEBUFFER_BINDING and GL_FRAMEBUFFER_BINDING
-        #     GL_BLEND_EQUATION_RGB and GL_BLEND_EQUATION
-        # it is safe to output either one of them, for simplity here just
-        # choose the shorter one which comes first in the sorted list
-        exporting_string_value_pairs = list()
-        for index, pair in enumerate(string_value_pairs):
-            if index == 0 or pair[1] != string_value_pairs[index - 1][1]:
-                exporting_string_value_pairs.append(pair)
-
-        inner_code_block = "\n".join([
-            template_enum_value_to_string_case.format(
-                value='0x%X' % value,
-                name='"%s"' % name,
-            ) for name, value in exporting_string_value_pairs
-        ])
+        exporting_string_value_pairs = [
+            pair
+            for index, pair in enumerate(string_value_pairs)
+            if index == 0 or pair[1] != string_value_pairs[index - 1][1]
+        ]
+        inner_code_block = "\n".join(
+            [
+                template_enum_value_to_string_case.format(
+                    value='0x%X' % value, name=f'"{name}"'
+                )
+                for name, value in exporting_string_value_pairs
+            ]
+        )
 
         exporting_groups.append((group_name, inner_code_block))
 
@@ -186,10 +182,7 @@ def dump_string_to_value_mapping(enums_and_values):
             return str(value)
         if value < 0xFFFF:
             return "0x%04X" % value
-        if value <= 0xFFFFFFFF:
-            return "0x%X" % value
-        else:
-            return "0xFFFFFFFF"
+        return "0x%X" % value if value <= 0xFFFFFFFF else "0xFFFFFFFF"
 
     return '\n'.join('{"%s", %s},' % (k, f(v)) for k, v in sorted(enums_and_values))
 
@@ -224,15 +217,11 @@ def main(header_output_path, source_output_path):
                         for enum in require.findall('enum'):
                             bigl_enums.add(enum.attrib['name'])
 
-    # Build a map from GLenum name to its value
-    gl_enum_groups = dict()
-    gles_enum_groups = dict()
-
     # Add all enums to default groups
-    gl_default_enums = dict()
-    gles_default_enums = dict()
-    gl_enum_groups[registry_xml.default_enum_group_name] = gl_default_enums
-    gles_enum_groups[registry_xml.default_enum_group_name] = gles_default_enums
+    gl_default_enums = {}
+    gles_default_enums = {}
+    gl_enum_groups = {registry_xml.default_enum_group_name: gl_default_enums}
+    gles_enum_groups = {registry_xml.default_enum_group_name: gles_default_enums}
     enums_and_values = []
 
     for enums_node in xml.root.findall('enums'):
@@ -252,19 +241,22 @@ def main(header_output_path, source_output_path):
                         continue
                     if enum_name in gles_enums:
                         if enum_group not in gles_enum_groups:
-                            gles_enum_groups[enum_group] = dict()
+                            gles_enum_groups[enum_group] = {}
                         gles_enum_groups[enum_group][enum_name] = enum_value
                     if enum_name in bigl_enums:
                         if enum_group not in gl_enum_groups:
-                            gl_enum_groups[enum_group] = dict()
+                            gl_enum_groups[enum_group] = {}
                         gl_enum_groups[enum_group][enum_name] = enum_value
 
     for empty_group in empty_enum_groups:
-        assert not empty_group in gles_enum_groups or not empty_group in gl_enum_groups, 'Remove %s from the empty groups list, it has enums now.' % empty_group
+        assert (
+            empty_group not in gles_enum_groups
+            or empty_group not in gl_enum_groups
+        ), f'Remove {empty_group} from the empty groups list, it has enums now.'
         if empty_group not in gles_enum_groups:
-            gles_enum_groups[empty_group] = dict()
+            gles_enum_groups[empty_group] = {}
         if empty_group not in gl_enum_groups:
-            gl_enum_groups[empty_group] = dict()
+            gl_enum_groups[empty_group] = {}
 
     # Write GLenum groups into the header file.
     header_content = template_gl_enums_header.format(
@@ -305,8 +297,8 @@ if __name__ == '__main__':
 
     gl_enum_utils_autogen_base_path = '../src/common/gl_enum_utils_autogen'
     outputs = [
-        gl_enum_utils_autogen_base_path + '.h',
-        gl_enum_utils_autogen_base_path + '.cpp',
+        f'{gl_enum_utils_autogen_base_path}.h',
+        f'{gl_enum_utils_autogen_base_path}.cpp',
     ]
 
     if len(sys.argv) > 1:

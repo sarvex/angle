@@ -404,7 +404,6 @@ support_EGL_ANGLE_explicit_context = True
 unsupported_enum_group_names = {
     'GetMultisamplePNameNV',
     'BufferPNameARB',
-    'BufferPointerNameARB',
     'VertexAttribPointerPropertyARB',
     'VertexAttribPropertyARB',
     'FenceParameterNameNV',
@@ -427,7 +426,6 @@ GLX_VERSIONS = [(1, 0), (1, 1), (1, 2), (1, 3), (1, 4)]
 CL_VERSIONS = [(1, 0), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2), (3, 0)]
 
 
-# API types
 class apis:
     GL = 'GL'
     GLES = 'GLES'
@@ -455,15 +453,14 @@ def strip_api_prefix(cmd_name):
 
 def find_xml_input(xml_file):
     for found_xml in xml_inputs:
-        if found_xml == xml_file or found_xml.endswith('/' + xml_file):
+        if found_xml == xml_file or found_xml.endswith(f'/{xml_file}'):
             return found_xml
-    raise Exception('Could not find XML input: ' + xml_file)
+    raise Exception(f'Could not find XML input: {xml_file}')
 
 
 def get_cmd_name(command_node):
     proto = command_node.find('proto')
-    cmd_name = proto.find('name').text
-    return cmd_name
+    return proto.find('name').text
 
 
 class CommandNames:
@@ -518,7 +515,7 @@ class RegistryXML:
             insertion_point.append(enums)
 
     def AddCommands(self, feature_name, annotation):
-        xpath = ".//feature[@name='%s']//command" % feature_name
+        xpath = f".//feature[@name='{feature_name}']//command"
         commands = [cmd.attrib['name'] for cmd in self.root.findall(xpath)]
 
         # Remove commands that have already been processed
@@ -546,8 +543,9 @@ class RegistryXML:
         elif 'cl' in supported:
             return 'clext'
         else:
-            assert False, 'Cannot classify support for %s: %s' % (extension.attrib['name'],
-                                                                  supported)
+            assert (
+                False
+            ), f"Cannot classify support for {extension.attrib['name']}: {supported}"
             return 'unknown'
 
     def AddExtensionCommands(self, supported_extensions, apis):
@@ -559,7 +557,7 @@ class RegistryXML:
 
         for extension in self.root.findall("extensions/extension"):
             extension_name = extension.attrib['name']
-            if not extension_name in supported_extensions:
+            if extension_name not in supported_extensions:
                 continue
 
             ext_annotations[extension_name] = self._ClassifySupport(extension)
@@ -586,12 +584,11 @@ class RegistryXML:
 
         for extension_name, ext_cmd_names in sorted(self.ext_data.items()):
 
-            # Detect and filter duplicate extensions.
-            dupes = []
-            for ext_cmd in ext_cmd_names:
-                if ext_cmd in self.all_cmd_names.get_all_commands():
-                    dupes.append(ext_cmd)
-
+            dupes = [
+                ext_cmd
+                for ext_cmd in ext_cmd_names
+                if ext_cmd in self.all_cmd_names.get_all_commands()
+            ]
             for dupe in dupes:
                 ext_cmd_names.remove(dupe)
 
@@ -605,7 +602,8 @@ class RegistryXML:
             stripped = strip_api_prefix(cmd)
             prefix = override_prefix or cmd[:(len(cmd) - len(stripped))]
             cmd_names.append(
-                ('%s%s' % (prefix.upper(), stripped), '%s%s' % (prefix.lower(), stripped)))
+                (f'{prefix.upper()}{stripped}', f'{prefix.lower()}{stripped}')
+            )
         return cmd_names
 
 
@@ -619,7 +617,7 @@ class EntryPoints:
             cmd_name = get_cmd_name(command_node)
 
             if api == apis.WGL:
-                cmd_name = cmd_name if cmd_name.startswith('wgl') else 'wgl' + cmd_name
+                cmd_name = cmd_name if cmd_name.startswith('wgl') else f'wgl{cmd_name}'
 
             if cmd_name not in commands:
                 continue
@@ -641,10 +639,10 @@ class EntryPoints:
 
 def GetEGL():
     egl = RegistryXML('egl.xml', 'egl_angle_ext.xml')
+    name_prefix = "EGL_VERSION_"
     for major_version, minor_version in EGL_VERSIONS:
         version = "%d_%d" % (major_version, minor_version)
-        name_prefix = "EGL_VERSION_"
-        feature_name = "%s%s" % (name_prefix, version)
+        feature_name = f"{name_prefix}{version}"
         egl.AddCommands(feature_name, version)
     egl.AddExtensionCommands(supported_egl_extensions, ['egl'])
     return egl
@@ -653,11 +651,11 @@ def GetEGL():
 def GetGLES():
     gles = RegistryXML('gl.xml', 'gl_angle_ext.xml')
     for major_version, minor_version in GLES_VERSIONS:
-        version = "{}_{}".format(major_version, minor_version)
+        version = f"{major_version}_{minor_version}"
         name_prefix = "GL_ES_VERSION_"
         if major_version == 1:
             name_prefix = "GL_VERSION_ES_CM_"
-        feature_name = "{}{}".format(name_prefix, version)
+        feature_name = f"{name_prefix}{version}"
         gles.AddCommands(feature_name, version)
     gles.AddExtensionCommands(supported_extensions, ['gles2', 'gles1'])
     return gles
